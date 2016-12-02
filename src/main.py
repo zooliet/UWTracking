@@ -162,6 +162,8 @@ if args['kcf'] is True:
 else:
 	kcf_tracker = None
 
+tic = time.time()
+toc = time.time()
 
 fps = FPS().start()
 while fps._numFrames < args["num_frames"]:
@@ -228,7 +230,10 @@ while fps._numFrames < args["num_frames"]:
 				tracking_window['start'] = False
 
 			if tracking_processing_flag is True and motor_is_moving_flag is not True:
-				tic = time.time()
+				# current_time = datetime.datetime.now().time().isoformat()
+				# toc = time.time()
+				# print("Tracking duration: {:04.0f} ms @{}".format(1000*(toc-tic), current_time))
+				# tic = toc
 				if color_tracker:
 					if kcf_tracker:
 						tracking_results['color_status'] = color_tracker.update(frame,  {'x1': kcf_tracker.x1, 'y1':kcf_tracker.y1, 'x2': kcf_tracker.x2, 'y2': kcf_tracker.y2})
@@ -297,13 +302,6 @@ while fps._numFrames < args["num_frames"]:
 						center_to_y = HALF_HEIGHT - cY
 						# print("Distance from Center: ({}px, {}px)".format(center_to_x, center_to_y))
 
-						# toc = time.time()
-						# tic_to_toc = toc - tic
-
-						# t_sec = tic_to_toc / 1000
-						# t_usec = int(t_sec * 1000000)
-						# current_time = datetime.datetime.now().time().isoformat()
-						# print("Tracking duration: {:04.0f} ms @{}".format(1000*tic_to_toc, current_time))
 
 						# 모터가 움직이는 동안 추적을 할 것인가 말것인가를 아래에서 결정
 						# (1) 모터 움직일 동안 motor_is_moving_flag을 lock 시켜서 추적을 안하는 방안
