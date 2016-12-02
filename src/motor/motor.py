@@ -2,10 +2,6 @@ import struct
 import serial
 import time
 
-# FOVS = [(62.0000/2, 34.5000/2), (25.0000/2, 14.5000/2), (17.9000/2, 10.2000/2), (14.4000/2, 8.2000/2), (11.3000/2, 6.4000/2),
-# 		(8.8000/2, 4.9000/2), (8.1000/2, 4.5000/2), (7.1000/2, 4.0000/2), (6.6000/2, 3.7000/2), (6.1000/2, 3.5000/2),
-# 		(5.6000/2, 3.2000/2), (5.1000/2, 2.9000/2), (4.7000/2, 2.6000/2), (4.4000/2, 2.5000/2), (4.1000/2, 2.3000/2),
-# 		(3.8000/2, 2.1000/2), (3.7000/2, 2.1000/2), (3.60000/2, 2.0000/2), (3.5000/2, 2.0000/2), (3.4000/2, 1.9000/2), ]
 FOVS = [(62.0000/2, 34.5000/2), #1
 		(28.5800/2, 16.5000/2), #2
 		(20.6666/2, 11.5000/2),
@@ -26,25 +22,6 @@ FOVS = [(62.0000/2, 34.5000/2), #1
 		(3.4444/2, 2.0294/2),
 		(3.2632/2, 1.9167/2),
 		(3.2000/2, 1.8000/2), ] #20
-
-# zoom_in(0.171875)로 재설정한 FOVs
-# FOVS = [(62.0000/2, 34.5000/2), #1/17
-# 		(55.0000/2, 30.5000/2), #2/17
-#         (44.5000/2, 25.0000/2), #3/17
-#         (36.5000/2, 20.6000/2), #4/17
-#         (28.3000/2, 15.8000/2), #5/17
-#         (21.0000/2, 12.0000/2), #6/17
-#         (16.1000/2, 9.0000/2), #7/17
-#         (11.0000/2, 6.2000/2), #8/17
-#         (7.9000/2, 4.3000/2), #9/17
-#         (6.2000/2, 3.5000/2), #10/17
-#         (5.2000/2, 2.9000/2), #11/17
-#         (4.7500/2, 2.7000/2), #12/17
-#         (4.350/2, 2.4900/2), #13/17
-#         (3.950/2, 2.280/2), #14/17
-#         (3.600/2, 2.080/2), #15/17
-#         (3.400/2, 1.950/2), #16/17
-#         (3.2000/2, 1.8000/2)] # 17/17
 
 class Motor:
 	TABLE = [0,  94, 188, 226,  97,  63, 221, 131, 194, 156, 126,  32, 163, 253,  31,  65,
@@ -105,7 +82,7 @@ class Motor:
 			rel, 0xFF
       	]
 
-		self.send_packet(buffer)
+		# self.send_packet(buffer)
 
 
 	def send_packet(self, buffer):
@@ -153,62 +130,55 @@ class Motor:
 		return x, y, z, f
 
 	def track(self, center_to_x, center_to_y, current_zoom):
-		if abs(center_to_x) <= 16:
-			center_to_x = 0
-
-		if abs(center_to_y) <= 9:
-			center_to_y = 0
+		# if abs(center_to_x) <= 16:
+		# 	center_to_x = 0
+		#
+		# if abs(center_to_y) <= 9:
+		# 	center_to_y = 0
 
 		if center_to_x == 0 and center_to_y == 0:
 			t_sec = 0
 		else:
 			(x_to, y_to, z_to, f_to) = self.pixel_to_pulse(center_to_x, center_to_y, current_zoom, limit = True)
-			# x_to, y_to는 pulse
 
-			# SPEED = 36000 # pulse per second - full speed: 120000, half speed: 600000
-			# MOVING_TIME = 0.01 # 0.1 for 100 ms, 0.01 for 10 ms
-			# MOVING_STEP = 3
-			# PULSE_LIMIT = int(Motor.SPEED * Motor.MOVING_TIME)
-
-			# if -(Motor.PULSE_LIMIT*Motor.MOVING_STEP) <= x_to <= Motor.PULSE_LIMIT*Motor.MOVING_STEP:
-			# 	x1_to = x3_to = int(x_to/Motor.MOVING_STEP)
-			# 	x2_to = x_to - (2 * x1_to)
-			# else:
-			# 	x1_to = x3_to = Motor.PULSE_LIMIT if x_to >= 0 else -Motor.PULSE_LIMIT
-			# 	if x1_to >= 0:
-			# 		x2_to = min(x_to - (2 * x1_to), Motor.PULSE_LIMIT * 2)
-			# 	else:
-			# 		x2_to = max(x_to - (2 * x1_to), -Motor.PULSE_LIMIT * 2)
+			# SPEED = 2400 # full speed: 120000, half speed: 600000
+			# MAX_MOVING_TIME = 0.03 # 0.1 for 100 ms
+			# d = max(abs(x_to), abs(y_to))
+			# t_sec = d / SPEED
 			#
-			# if -(Motor.PULSE_LIMIT*Motor.MOVING_STEP) <= y_to <= Motor.PULSE_LIMIT*Motor.MOVING_STEP:
-			# 	y1_to = y3_to = int(y_to/Motor.MOVING_STEP)
-			# 	y2_to = y_to - (2 * y1_to)
-			# else:
-			# 	y1_to = y3_to = Motor.PULSE_LIMIT if y_to >= 0 else -Motor.PULSE_LIMIT
-			# 	if y1_to >= 0:
-			# 		y2_to = min(y_to - (2 * y1_to), Motor.PULSE_LIMIT * 2)
-			# 	else:
-			# 		y2_to = max(y_to - (2 * y1_to), -Motor.PULSE_LIMIT * 2)
+			# if t_sec > MAX_MOVING_TIME:
+			# 	x_to = int(x_to	* (MAX_MOVING_TIME / t_sec))
+			# 	y_to = int(y_to	* (MAX_MOVING_TIME / t_sec))
+			# 	t_sec = MAX_MOVING_TIME
 			#
-			# print("Pixel: ({},{}) => Pulse: ({},{}) => [{:+d}{:+d}{:+d}, {:+d}{:+d}{:+d}]".format(center_to_x, center_to_y, x_to, y_to, x1_to, x2_to, x3_to, y1_to, y2_to, y3_to))
-			#
-			# self.move(x = x1_to, y = y1_to, z = z_to, f = f_to, t = Motor.MOVING_TIME)
-			# self.move(x = x2_to, y = y2_to, z = z_to, f = f_to, t = Motor.MOVING_TIME)
-			# self.move(x = x3_to, y = y3_to, z = z_to, f = f_to, t = Motor.MOVING_TIME)
-			#
-			# t_sec = Motor.MOVING_TIME * Motor.MOVING_STEP
+			# self.move(x = x_to, y = y_to, z = z_to, f = f_to, t = t_sec)
 
-			SPEED = 2400 # full speed: 120000, half speed: 600000
-			MAX_MOVING_TIME = 0.03 # 0.1 for 100 ms
-			d = max(abs(x_to), abs(y_to))
-			t_sec = d / SPEED
+			# 나중에 아래 상수는 맨위로 이동할 것 
+			FLICTIONLESS_PULSE_PER_SEC = 2400 # pulse / sec
+			MOVING_TIME = 0.01 #0.01 # 10 ms
+			PULSE_PER_MOVING_TIME = FLICTIONLESS_PULSE_PER_SEC * MOVING_TIME
+			WEIGHTS = [1,2,3,2,1]
+			WEIGHTS_TOTAL = sum(WEIGHTS)
+			MAX_PULSE = int(PULSE_PER_MOVING_TIME * WEIGHTS_TOTAL)
+			MOVING_STEP = len(WEIGHTS)
 
-			if t_sec > MAX_MOVING_TIME:
-				x_to = int(x_to	* (MAX_MOVING_TIME / t_sec))
-				y_to = int(y_to	* (MAX_MOVING_TIME / t_sec))
-				t_sec = MAX_MOVING_TIME
+			if abs(x_to) > MAX_PULSE:
+				x_to = MAX_PULSE if x_to >= 0 else -MAX_PULSE
 
-			self.move(x = x_to, y = y_to, z = z_to, f = f_to, t = t_sec)
+			if abs(y_to) > MAX_PULSE:
+				y_to = MAX_PULSE if y_to >= 0 else -MAX_PULSE
+
+			x_pulses = list(map(lambda weight: int(x_to*weight/WEIGHTS_TOTAL), WEIGHTS))
+			y_pulses = list(map(lambda weight: int(y_to*weight/WEIGHTS_TOTAL), WEIGHTS))
+
+			print("Pixel: ({},{}) => Pulse: ({},{}) => [{},{}]".format(center_to_x, center_to_y, x_to, y_to, x_pulses, y_pulses))
+
+			for (x_pulse, y_pulse) in zip(x_pulses, y_pulses):
+				self.move(x = x_pulse, y = y_pulse, z = 0, f = 0, t = MOVING_TIME)
+
+			t_sec = MOVING_TIME * MOVING_STEP
+
+
 
 
 		return t_sec
