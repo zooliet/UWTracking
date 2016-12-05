@@ -16,6 +16,8 @@ import hashlib
 
 from trackers.color_tracker import ColorTracker
 from trackers.kcf_tracker import KCFTracker
+from trackers.cmt_tracker import CMTTracker
+
 
 from motor import Motor
 
@@ -51,15 +53,10 @@ ap.add_argument("-z", "--zoom", help = "path to zoom control port")
 
 ap.add_argument("--color", action="store_true", help="Enable color tracking")
 ap.add_argument("--kcf", action="store_true", help="Enable KCF tracking")
+ap.add_argument("--cmt", action="store_true", help="Enable CMT tracking")
 
-# ap.add_argument('--motion', dest='motion', action='store_true', help='Enable motion tracking')
-# ap.add_argument('--cmt', dest='cmt', action='store_true', help='Enable CMT tracking')
-# ap.add_argument('--optical', dest='optical', action='store_true', help='Enable optical flow tracking')
-# ap.add_argument('--with-scale', dest='estimate_scale', action='store_true', help='Enable scale estimation')
-# ap.add_argument('--with-rotation', dest='estimate_rotation', action='store_true', help='Enable rotation estimation')
 args = vars(ap.parse_args())
 # print(args)
-
 
 WIDTH       = 640  # 640x360, 1024x576, 1280x720, 1920x1080
 HEIGHT      = WIDTH * 9 // 16
@@ -88,7 +85,6 @@ frame = imutils.resize(frame, width=WIDTH)
 prev_hash = hashlib.sha1(frame).hexdigest()
 prev_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-
 pause_flag = False
 tracking_processing_flag = False
 force_init_flag = False
@@ -101,6 +97,7 @@ zoom_is_moving_flag = False
 zooms = [1,2,4,8,12,16,20]
 zoom_idx = 0
 current_zoom = zooms[zoom_idx]
+show_lap_time_flag = False
 
 def motor_has_finished_moving(args):
 	# print("Motor: End of Moving")
@@ -162,6 +159,12 @@ if args['kcf'] is True:
 else:
 	kcf_tracker = None
 
+if args['cmt'] is True:
+	global cmt_detector_threshold
+	cmt_tracker = CMTTracker(True, False, cmt_detector_threshold = 70) # estimate_scale, estimate_rotation, detector_threshold
+else:
+	cmt_tracker = None
+
 tic = time.time()
 toc = time.time()
 
@@ -186,6 +189,7 @@ while fps._numFrames < args["num_frames"]:
 			if tracking_window['start'] == True:
 				if((tracking_window['x2'] - tracking_window['x1']) > MIN_SELECTION_WIDTH) and ((tracking_window['y2'] - tracking_window['y1']) > MIN_SELECTION_HEIGHT):
 					# print('selection is ok')
+					tracking_processing_flag = True
 
 					if color_tracker:
 						if color_tracker.init(frame, options=tracking_window):
@@ -211,7 +215,20 @@ while fps._numFrames < args["num_frames"]:
 						kcf_tracker.init(frame)
 						#if you use hog feature, there will be a short pause after you draw a first boundingbox, that is due to the use of Numba.
 
-					tracking_processing_flag = True
+					if cmt_tracker:
+						cmt_tracker.x1 = tracking_window['x1']
+						cmt_tracker.y1 = tracking_window['y1']
+						cmt_tracker.x2 = tracking_window['x2']
+						cmt_tracker.y2 = tracking_window['y2']
+
+						cmt_tracker.init(frame)
+						if cmt_tracker.num_initial_keypoints == 0:
+							print('No keypoints found in selection')
+							tracking_processing_flag = False
+						else:
+							print("num_selected_keypoints is {}".format(cmt_tracker.num_initial_keypoints))
+							num_of_prev_tracked_keypoints = 0
+
 				else:
 					if args['serial'] and zoom_is_moving_flag is not True:
 						centerX = (tracking_window['x1'] + tracking_window['x2']) // 2
@@ -230,10 +247,11 @@ while fps._numFrames < args["num_frames"]:
 				tracking_window['start'] = False
 
 			if tracking_processing_flag is True and motor_is_moving_flag is not True:
-				# current_time = datetime.datetime.now().time().isoformat()
-				# toc = time.time()
-				# print("Tracking duration: {:04.0f} ms @{}".format(1000*(toc-tic), current_time))
-				# tic = toc
+				if show_lap_time_flag is True:
+					current_time = datetime.datetime.now().time().isoformat()
+					toc = time.time()
+					print("Tracking duration: {:04.0f} ms @{}".format(1000*(toc-tic), current_time))
+					tic = toc
 				if color_tracker:
 					if kcf_tracker:
 						tracking_results['color_status'] = color_tracker.update(frame,  {'x1': kcf_tracker.x1, 'y1':kcf_tracker.y1, 'x2': kcf_tracker.x2, 'y2': kcf_tracker.y2})
@@ -245,7 +263,7 @@ while fps._numFrames < args["num_frames"]:
 					# 	print("COLOR_TRACKER: Tracking fail")
 
 				if kcf_tracker:
-					if force_init_flag is not True:
+					if kcf_tracker.force_init_flag is not True:
 						boundingbox, tracking_results['kcf_peak_value'], loc = kcf_tracker.update(frame)
 						boundingbox = list(map(int, boundingbox))
 
@@ -264,18 +282,62 @@ while fps._numFrames < args["num_frames"]:
 							if diff > boundingbox[2] // 6: # boundingbox[2] == width
 								kcf_tracker.x1 = color_tracker.center[0] - boundingbox[2] // 2
 								kcf_tracker.x2 = color_tracker.center[0] + boundingbox[2] // 2
-								force_init_flag = True
+								kcf_tracker.force_init_flag = True
 
 							diff = abs(color_tracker.center[1] - cY)
 							if diff < boundingbox[3] // 6: # boundingbox[3] == height
 								kcf_tracker.y1 = int(color_tracker.center[1] - boundingbox[3] / 4)
 								kcf_tracker.y2 = int(color_tracker.center[1] + boundingbox[3] * 3 / 4)
 								# print(diff, kcf_tracker.x1, kcf_tracker.y1, kcf_tracker.x2, kcf_tracker.y2)
-								force_init_flag = True
-					else: # if force_init_flag is True:
-						print('Force init...')
-						force_init_flag = False
+								kcf_tracker.force_init_flag = True
+					else: # if kcf_tracker.force_init_flag is True:
+						print('KCF: Force init...')
+						kcf_tracker.force_init_flag = False
 						kcf_tracker.init(frame)
+
+				if cmt_tracker:
+					if cmt_tracker.force_init_flag is not True:
+						cmt_tracker.update(frame)
+
+						if cmt_tracker.has_result:
+							num_of_tracked_keypoints = len(cmt_tracker.tracked_keypoints)
+							cmt_tracker.cX = int(cmt_tracker.center[0])
+							cmt_tracker.cY = int(cmt_tracker.center[1])
+
+							try:
+								scale_change = cmt_tracker.scale_estimate/cmt_tracker.prev_scale_estimate
+							except Exception as e:
+								cmt_tracker.prev_scale_estimate = 1
+								scale_change = cmt_tracker.scale_estimate/cmt_tracker.prev_scale_estimate
+
+							cmt_tracker.prev_scale_estimate = cmt_tracker.scale_estimate
+							print("{}. Tracked(inlier): {}, Outliers: {}, Votes: {}: Active: {}, Scale: {:02.2f}({:01.2f})"
+								.format(cmt_tracker.frame_idx, num_of_tracked_keypoints, len(cmt_tracker.outliers), len(cmt_tracker.votes), len(cmt_tracker.active_keypoints), cmt_tracker.scale_estimate, scale_change))
+
+							###
+
+
+
+
+
+
+
+
+							###
+
+							util.draw_str(frame, (550, 20), 'Tracking')
+							cv2.rectangle(frame, cmt_tracker.tl, cmt_tracker.br, (255, 255, 255), 1)
+							# util.draw_keypoints_by_number(cmt_tracker.tracked_keypoints, frame, (0, 0, 255))
+							# util.draw_keypoints_by_number(cmt_tracker.outliers, frame, (255, 0, 0))
+							util.draw_keypoints(cmt_tracker.tracked_keypoints, frame, (255, 255, 255))
+							util.draw_keypoints(cmt_tracker.votes[:, :2], frame, (0, 255, 255))
+							util.draw_keypoints(cmt_tracker.outliers[:, :2], frame, (0, 0, 255))
+							cv2.drawMarker(frame, (cmt_tracker.cX, cmt_tracker.cY), (255, 255, 255))
+
+					else:
+						print('CMT: Force init...')
+						cmt_tracker.force_init_flag = False
+						cmt_tracker.init(frame)
 
 				if args['serial'] and zoom_is_moving_flag is not True:
 					motor_driving_flag = False
@@ -398,22 +460,6 @@ while fps._numFrames < args["num_frames"]:
 				zoom_timer = Timer(1, zoom_has_finished_moving, args = [False])
 				zoom_timer.start()
 
-		# elif key == 65362: # 'up', 63232 for Mac
-		# 	if zoom_is_moving_flag is not True: # and current_zoom < 17:
-		# 		current_zoom += 1
-		# 		zoom_timer = Timer(0.171875, zoom_has_finished_moving, args = [False])
-		# 		zoom.zoom(current_zoom, direction='in')
-		# 		zoom_timer.start()
-		# 		zoom_is_moving_flag = True
-		# 		print('Zoom to:', current_zoom)
-		# elif key == 65364: # 'down', 63233 for Mac
-		# 	if zoom_is_moving_flag is not True: # and current_zoom > 1:
-		# 		current_zoom -= 1
-		# 		zoom_timer = Timer(0.171875, zoom_has_finished_moving, args = [False])
-		# 		zoom.zoom(current_zoom, direction='out')
-		# 		zoom_timer.start()
-		# 		zoom_is_moving_flag = True
-		# 		print('Zoom to:', current_zoom)
 		elif key == 65361: # 'left', 63234 for Mac
 			if zoom_is_moving_flag is not True:
 				zoom_idx = 0
@@ -434,6 +480,29 @@ while fps._numFrames < args["num_frames"]:
 		elif key == ord('d'):
 			print("Degree:", motor.sum_of_x_degree, motor.sum_of_y_degree)
 
+		elif key == ord('t') and args['cmt'] is True:
+			if args['path']:
+				grabbed, frame = stream.read()
+			else:
+				frame = stream.read()
+
+			frame = imutils.resize(frame, width=WIDTH)
+			gray0 = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+			gray0 = cv2.GaussianBlur(gray0, (3, 3), 0)
+
+			for x in range(10, 500, 10):
+				detector = cv2.BRISK_create(x, 3, 3.0)
+				keypoints = detector.detect(gray0)
+
+				cmt_detector_threshold = x
+				if len(keypoints) < 300: # 900:
+					break
+			print("BRISK threshold is set to {} with {} keypoints".format(x, len(keypoints)))
+			cmt_tracker.detector = detector
+			cmt_tracker.descriptor = detector
+
+		elif key == ord('l'):
+			show_lap_time_flag = not show_lap_time_flag
 		# pause가 아니면 prev_hash를 갱신함 (당연),
 		# 반대로 pause일때는 갱신하지 않음으로 prev_hash와 frame_hash를 불일치 시킴. Why? pause에도 key 입력 루틴을 실행하기 위한 의도적인 조치임
 		if pause_flag is False: prev_hash = frame_hash

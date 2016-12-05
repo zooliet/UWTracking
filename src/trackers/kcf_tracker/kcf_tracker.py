@@ -106,6 +106,8 @@ class KCFTracker:
 		self.padding = 2.5   # extra area surrounding the target
 		self.output_sigma_factor = 0.125   # bandwidth of gaussian target
 
+		self.force_init_flag = False
+
 		if(hog):  # HOG feature
 			# VOT
 			self.interp_factor = 0.012   # linear interpolation factor for adaptation
