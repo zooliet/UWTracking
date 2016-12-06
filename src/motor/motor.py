@@ -82,7 +82,7 @@ class Motor:
 			rel, 0xFF
       	]
 
-		# self.send_packet(buffer)
+		self.send_packet(buffer)
 
 
 	def send_packet(self, buffer):
@@ -130,11 +130,11 @@ class Motor:
 		return x, y, z, f
 
 	def track(self, center_to_x, center_to_y, current_zoom):
-		# if abs(center_to_x) <= 16:
-		# 	center_to_x = 0
-		#
-		# if abs(center_to_y) <= 9:
-		# 	center_to_y = 0
+		if abs(center_to_x) <= 4:
+			center_to_x = 0
+
+		if abs(center_to_y) <= 4:
+			center_to_y = 0
 
 		if center_to_x == 0 and center_to_y == 0:
 			t_sec = 0
@@ -153,11 +153,11 @@ class Motor:
 			#
 			# self.move(x = x_to, y = y_to, z = z_to, f = f_to, t = t_sec)
 
-			# 나중에 아래 상수는 맨위로 이동할 것 
-			FLICTIONLESS_PULSE_PER_SEC = 2400 # pulse / sec
+			# 나중에 아래 상수는 맨위로 이동할 것
+			FLICTIONLESS_PULSE_PER_SEC = [0,2400, 2000,0,1600,0,0,0,1200,0,0,0,1000,0,0,0,700,0,0,0,600] # pulse / sec # zoom and fov에 따라 가변적이어야 함: 2400 ~ 300
 			MOVING_TIME = 0.01 #0.01 # 10 ms
-			PULSE_PER_MOVING_TIME = FLICTIONLESS_PULSE_PER_SEC * MOVING_TIME
-			WEIGHTS = [1,2,3,2,1]
+			PULSE_PER_MOVING_TIME = FLICTIONLESS_PULSE_PER_SEC[current_zoom] * MOVING_TIME
+			WEIGHTS = [1,3,6,3,1]
 			WEIGHTS_TOTAL = sum(WEIGHTS)
 			MAX_PULSE = int(PULSE_PER_MOVING_TIME * WEIGHTS_TOTAL)
 			MOVING_STEP = len(WEIGHTS)
