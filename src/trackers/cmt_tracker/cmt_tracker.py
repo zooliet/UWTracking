@@ -35,6 +35,15 @@ class CMTTracker:
         self.force_init_flag = False
         self.has_result = False
         self.frame_idx = 0
+        self.prev_scale_estimate = 1.0
+
+        self.mean_width = self.x2 - self.x1
+        self.mean_height = self.y2 - self.y1
+        self.mean_center = (self.cX, self.cY)
+
+        self.last_10_widths = np.array([self.mean_width], dtype=np.int16)
+        self.last_10_heights = np.array([self.mean_height], dtype=np.int16)
+        self.last_10_centers = np.array([self.mean_center])
 
         # Get initial keypoints in whole image
         keypoints_cv = self.detector.detect(gray)
@@ -264,7 +273,7 @@ class CMTTracker:
         self.gray0 = gray
         self.frame_idx += 1
 
-        if not any(np.isnan(self.center)) and self.active_keypoints.shape[0] > self.num_initial_keypoints / 10:
+        if not any(np.isnan(self.center)): # and self.active_keypoints.shape[0] > self.num_initial_keypoints / 10:
             self.has_result = True
 
             tl = util.array_to_int_tuple(center + scale_estimate * util.rotate(self.center_to_tl[None, :], rotation_estimate).squeeze())
@@ -278,7 +287,6 @@ class CMTTracker:
             self.br = br
         else:
             self.has_result = False
-
 
     def track(self, gray, THR_FB=20, tl=(0,0), br=(0, 0)):
         num_keypoints = self.active_keypoints.shape[0]
@@ -322,17 +330,17 @@ class CMTTracker:
             keypoints_tracked[:, :2] = nextPts
             pts = pts[status, :]
 
-            # dists = np.sqrt(np.power(nextPts - pts, 2).sum(axis=1))
-            # num_of_dists = len(dists)
-            #
-            # if num_of_dists > 10:
-            #     dists_mean = np.mean(np.sort(dists)[-10:])
-            # elif num_of_dists > 4:
-            #     dists_mean = np.mean(np.sort(dists)[-4:])
-            # else:
-            #     dists_mean = np.mean(dists)
-            # # print(dists, dists_mean, sep = " => ")
-            #
+            dists = np.sqrt(np.power(nextPts - pts, 2).sum(axis=1))
+            num_of_dists = len(dists)
+
+            if num_of_dists > 10:
+                dists_mean = np.mean(np.sort(dists)[-10:])
+            elif num_of_dists > 4:
+                dists_mean = np.mean(np.sort(dists)[-4:])
+            else:
+                dists_mean = np.mean(dists)
+            # print(dists, dists_mean, sep = " => ")
+
             # DISPLAMENT = 0.3
             # TAGET_CRITERIA = 0.1
             #

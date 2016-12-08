@@ -161,7 +161,7 @@ else:
 
 if args['cmt'] is True:
 	global cmt_detector_threshold
-	cmt_tracker = CMTTracker(True, False, cmt_detector_threshold = 70) # estimate_scale, estimate_rotation, detector_threshold
+	cmt_tracker = CMTTracker(True, False, cmt_detector_threshold = 50) # estimate_scale, estimate_rotation, detector_threshold
 else:
 	cmt_tracker = None
 
@@ -197,7 +197,6 @@ while fps._numFrames < args["num_frames"]:
 						else:
 							print('Red Not Found:', color_tracker.center)
 
-
 					if kcf_tracker:
 						# ix = tracking_window['x1']
 						# iy = tracking_window['y1']
@@ -227,7 +226,6 @@ while fps._numFrames < args["num_frames"]:
 							tracking_processing_flag = False
 						else:
 							print("num_selected_keypoints is {}".format(cmt_tracker.num_initial_keypoints))
-							num_of_prev_tracked_keypoints = 0
 
 				else:
 					if args['serial'] and zoom_is_moving_flag is not True:
@@ -296,7 +294,11 @@ while fps._numFrames < args["num_frames"]:
 						kcf_tracker.init(frame)
 
 				if cmt_tracker:
-					if cmt_tracker.force_init_flag is not True:
+					if cmt_tracker.force_init_flag is True:
+						print('CMT: Force init...')
+						cmt_tracker.force_init_flag = False
+						cmt_tracker.init(frame)
+					else:
 						cmt_tracker.update(frame)
 
 						if cmt_tracker.has_result:
@@ -304,40 +306,93 @@ while fps._numFrames < args["num_frames"]:
 							cmt_tracker.cX = int(cmt_tracker.center[0])
 							cmt_tracker.cY = int(cmt_tracker.center[1])
 
-							try:
-								scale_change = cmt_tracker.scale_estimate/cmt_tracker.prev_scale_estimate
-							except Exception as e:
-								cmt_tracker.prev_scale_estimate = 1
-								scale_change = cmt_tracker.scale_estimate/cmt_tracker.prev_scale_estimate
+							box_tl = cmt_tracker.tl
+							box_br = cmt_tracker.br
 
+							scale_change = cmt_tracker.scale_estimate/cmt_tracker.prev_scale_estimate
 							cmt_tracker.prev_scale_estimate = cmt_tracker.scale_estimate
-							print("{}. Tracked(inlier): {}, Outliers: {}, Votes: {}: Active: {}, Scale: {:02.2f}({:01.2f})"
-								.format(cmt_tracker.frame_idx, num_of_tracked_keypoints, len(cmt_tracker.outliers), len(cmt_tracker.votes), len(cmt_tracker.active_keypoints), cmt_tracker.scale_estimate, scale_change))
+							# print("{}. Tracked(inlier): {}, Outliers: {}, Votes: {}: Active: {}, Scale: {:02.2f}({:01.2f})"
+							# 	.format(cmt_tracker.frame_idx, num_of_tracked_keypoints, len(cmt_tracker.outliers), len(cmt_tracker.votes), len(cmt_tracker.active_keypoints), cmt_tracker.scale_estimate, scale_change))
 
-							###
+							if False: #cmt_tracker.adjust_flag is True:
+								cmt_tracker.adjust_flag = False
 
+								if cmt_tracker.frame_idx < 10:
+									print("Adjust center around keypoints at frame {}".format(cmt_tracker.frame_idx))
+									# pause_flag = True
+									cmt_tracker.force_init_flag = True
 
+									width = int((cmt_tracker.br[0] - cmt_tracker.tl[0]) * 0.9)
+									height = int((cmt_tracker.br[1] - cmt_tracker.tl[1]) * 0.9)
 
+									box_tl = (int(cmt_tracker.cX - width / 2), int(cmt_tracker.cY - height / 2))
+									box_br = (int(cmt_tracker.cX + width / 2), int(cmt_tracker.cY + height / 2))
 
+								elif cmt_tracker.frame_idx >= 10:
+									print("Adjust center around previous area at frame {}".format(cmt_tracker.frame_idx))
+									# pause_flag = True
+									cmt_tracker.force_init_flag = True
 
+									# box_tl = (int(box_center[0] - cmt_tracker.mean_width / 2), int(box_center[1] - cmt_tracker.mean_height / 2))
+									# box_br = (int(box_center[0] + cmt_tracker.mean_width / 2), int(box_center[1] + cmt_tracker.mean_height / 2))
+									box_tl = (int(cmt_tracker.cX - cmt_tracker.mean_width / 2), int(cmt_tracker.cY - cmt_tracker.mean_height / 2))
+									box_br = (int(cmt_tracker.cX + cmt_tracker.mean_width / 2), int(cmt_tracker.cY + cmt_tracker.mean_height / 2))
 
+							elif False: #num_of_tracked_keypoints < 5:
+								print("scale_estimate is greater or less than {}".format(cmt_tracker.scale_estimate))
+								# pause_flag = True
+								cmt_tracker.force_init_flag = True
+								# box_tl = (int(box_center[0] - cmt_tracker.mean_width / 2), int(box_center[1] - cmt_tracker.mean_height / 2))
+								# box_br = (int(box_center[0] + cmt_tracker.mean_width / 2), int(box_center[1] + cmt_tracker.mean_height / 2))
+								box_tl = (int(cmt_tracker.cX - cmt_tracker.mean_width / 2), int(cmt_tracker.cY - cmt_tracker.mean_height / 2))
+								box_br = (int(cmt_tracker.cX + cmt_tracker.mean_width / 2), int(cmt_tracker.cY + cmt_tracker.mean_height / 2))
 
+							elif False: #scale_change < 0.9 or scale_change > 2.0:
+								print("Scale change: ", scale_change)
+								# pause_flag = True
+								cmt_tracker.force_init_flag = True
+								# box_tl = (int(box_center[0] - cmt_tracker.mean_width / 2), int(box_center[1] - cmt_tracker.mean_height / 2))
+								# box_br = (int(box_center[0] + cmt_tracker.mean_width / 2), int(box_center[1] + cmt_tracker.mean_height / 2))
+								box_tl = (int(cmt_tracker.cX - cmt_tracker.mean_width / 2), int(cmt_tracker.cY - cmt_tracker.mean_height / 2))
+								box_br = (int(cmt_tracker.cX + cmt_tracker.mean_width / 2), int(cmt_tracker.cY + cmt_tracker.mean_height / 2))
 
-							###
+							box_center = ((box_tl[0] + box_br[0]) // 2, (box_tl[1] + box_br[1]) // 2)
+
+							width = box_br[0] - box_tl[0]
+							height = box_br[1] - box_tl[1]
+
+							(cmt_tracker.x1, cmt_tracker.y1) = box_tl
+							(cmt_tracker.x2, cmt_tracker.y2) = box_br
+
+							# calulate averages for height, width, center
+							cmt_tracker.last_10_widths = np.append(cmt_tracker.last_10_widths, width)
+							cmt_tracker.last_10_heights = np.append(cmt_tracker.last_10_heights, height)
+							cmt_tracker.last_10_centers = np.vstack([cmt_tracker.last_10_centers, box_center])
+
+							if cmt_tracker.last_10_widths.shape[0] > 10:
+								cmt_tracker.last_10_widths = np.delete(cmt_tracker.last_10_widths, (0), axis=0)
+								cmt_tracker.last_10_heights = np.delete(cmt_tracker.last_10_heights, (0), axis=0)
+								cmt_tracker.last_10_centers = np.delete(cmt_tracker.last_10_centers, (0), axis=0)
+
+							cmt_tracker.mean_width = np.round(np.mean(np.array(cmt_tracker.last_10_widths))).astype(np.int)
+							cmt_tracker.mean_height = np.round(np.mean(np.array(cmt_tracker.last_10_heights))).astype(np.int)
+							cmt_tracker.mean_center = np.round(np.mean(cmt_tracker.last_10_centers, axis = 0)).astype(np.int)
 
 							util.draw_str(frame, (550, 20), 'Tracking')
-							cv2.rectangle(frame, cmt_tracker.tl, cmt_tracker.br, (255, 255, 255), 1)
+							cv2.rectangle(frame, cmt_tracker.tl, cmt_tracker.br, (255, 0, 0), 1)
+							cv2.drawMarker(frame, box_center, (0,255,0))
+
 							# util.draw_keypoints_by_number(cmt_tracker.tracked_keypoints, frame, (0, 0, 255))
 							# util.draw_keypoints_by_number(cmt_tracker.outliers, frame, (255, 0, 0))
-							util.draw_keypoints(cmt_tracker.tracked_keypoints, frame, (255, 255, 255))
-							util.draw_keypoints(cmt_tracker.votes[:, :2], frame, (0, 255, 255))
-							util.draw_keypoints(cmt_tracker.outliers[:, :2], frame, (0, 0, 255))
-							cv2.drawMarker(frame, (cmt_tracker.cX, cmt_tracker.cY), (255, 255, 255))
+							# util.draw_keypoints(cmt_tracker.tracked_keypoints, frame, (255, 255, 255))
+							# util.draw_keypoints(cmt_tracker.votes[:, :2], frame, (0, 255, 255))
+							# util.draw_keypoints(cmt_tracker.outliers[:, :2], frame, (0, 0, 255))
 
-					else:
-						print('CMT: Force init...')
-						cmt_tracker.force_init_flag = False
-						cmt_tracker.init(frame)
+							cv2.drawMarker(frame, (cmt_tracker.cX, cmt_tracker.cY), (255, 255, 255))
+							# cv2.drawMarker(frame, tuple(cmt_tracker.mean_center), (0, 0, 255))
+							test_tl = box_center[0] - cmt_tracker.mean_width//2, box_center[1] - cmt_tracker.mean_height//2
+							test_br = box_center[0] + cmt_tracker.mean_width//2, box_center[1] + cmt_tracker.mean_height//2
+							cv2.rectangle(frame, test_tl, test_br, (255, 255, 255), 1)
 
 				if args['serial'] and zoom_is_moving_flag is not True:
 					motor_driving_flag = False
@@ -381,13 +436,6 @@ while fps._numFrames < args["num_frames"]:
 						# or case (2)
 						# (t_sec, t_usec) = motor.track(center_to_x, center_to_y, current_zoom)
 
-					# d = max(abs(x_to), abs(y_to))
-					# dy = HEIGHT - cY
-					# dx = abs(WIDTH/2 - cX)
-					# # d = int(math.sqrt(dx**2 + dy**2))
-					# d = dy
-					# print(d, ":", kcf_tracker._scale)
-
 					# if tracking_results['kcf_peak_value'] < 0.3:
 						# print(kcf_tracker.location, kcf_tracker.locations[-1], loc)
 						# adj_x = int(boundingbox[2] * loc[0]/4)
@@ -408,15 +456,8 @@ while fps._numFrames < args["num_frames"]:
 						# kcf_tracker.init(frame)
 						# pause_flag = True
 
-
-
-
-
-
-
 			cv2.line(frame, (HALF_WIDTH, 0), (HALF_WIDTH, WIDTH), (200, 200, 200), 0)
 			cv2.line(frame, (0, HALF_HEIGHT), (WIDTH, HALF_HEIGHT), (200, 200, 200), 0)
-
 
 		if args["display"] is True:
 			if tracking_window['dragging'] == True:
@@ -442,7 +483,10 @@ while fps._numFrames < args["num_frames"]:
 		elif key == ord('s'):
 			tracking_processing_flag = False
 		elif key == ord('i'):
-			force_init_flag = True
+			if args['kcf']:
+				kcf_tracker.force_init_flag = True
+			if args['cmt']:
+				cmt_tracker.force_init_flag = True
 		elif key == 65362: # 'up', 63232 for Mac
 			if zoom_is_moving_flag is not True and current_zoom < 20:
 				zoom_idx += 1
