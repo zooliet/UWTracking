@@ -14,10 +14,13 @@ class CMTTracker:
     THR_CONF = 0.75
     THR_RATIO = 0.8
     DESC_LENGTH = 512
+    MIN_NUM_OF_KEYPOINTS_FOR_BRISK_THRESHOLD = 100 # 900
+    PREV_HISTORY_SIZE = 100
 
-    def __init__(self, scale, rotation, cmt_detector_threshold = 70):
+    def __init__(self, scale, rotation, cmt_detector_threshold = 70, best_effort = False):
         self.estimate_scale = scale
         self.estimate_rotation = rotation
+        self.best_effort = best_effort
 
         self.detector = cv2.BRISK_create(cmt_detector_threshold, 3, 3.0)
         self.descriptor = self.detector
@@ -41,27 +44,33 @@ class CMTTracker:
         self.mean_height = self.y2 - self.y1
         self.mean_center = (self.cX, self.cY)
 
-        self.last_10_widths = np.array([self.mean_width], dtype=np.int16)
-        self.last_10_heights = np.array([self.mean_height], dtype=np.int16)
-        self.last_10_centers = np.array([self.mean_center])
+        self.prev_widths = np.array([self.mean_width], dtype=np.int16)
+        self.prev_heights = np.array([self.mean_height], dtype=np.int16)
+        self.prev_centers = np.array([self.mean_center])
+
+        self.num_of_failure = 0
 
         # Get initial keypoints in whole image
         keypoints_cv = self.detector.detect(gray)
         # Remember keypoints that are in the rectangle as selected keypoints
-        ind = util.in_rect(keypoints_cv, self.tl, self.br)
+        if len(keypoints_cv) == 0:
+            # print("[CMT] No keypoints found somehow")
+            num_selected_keypoints = 0
+        else:
+            ind = util.in_rect(keypoints_cv, self.tl, self.br)
 
-        selected_keypoints_cv = list(itertools.compress(keypoints_cv, ind))
-        background_keypoints_cv = list(itertools.compress(keypoints_cv, ~ind))
-        selected_keypoints_cv, self.selected_features = self.descriptor.compute(gray, selected_keypoints_cv)
-        selected_keypoints = util.keypoints_cv_to_np(selected_keypoints_cv)
-        num_selected_keypoints = len(selected_keypoints_cv)
-        # print("num_selected_keypoints is {}".format(num_selected_keypoints))
-        # print("num_background_keypoints is {}".format(len(background_keypoints_cv)))
+            selected_keypoints_cv = list(itertools.compress(keypoints_cv, ind))
+            background_keypoints_cv = list(itertools.compress(keypoints_cv, ~ind))
+            selected_keypoints_cv, self.selected_features = self.descriptor.compute(gray, selected_keypoints_cv)
+            selected_keypoints = util.keypoints_cv_to_np(selected_keypoints_cv)
+            num_selected_keypoints = len(selected_keypoints_cv)
+            # print("[CMT] num_selected_keypoints is {}".format(num_selected_keypoints))
+            # print("[CMT] num_background_keypoints is {}".format(len(background_keypoints_cv)))
 
         if num_selected_keypoints != 0:
             # Remember keypoints that are not in the rectangle as background keypoints
             # background_keypoints_cv = list(itertools.compress(keypoints_cv, ~ind))
-            # print("num_background_keypoints is {}".format(len(background_keypoints_cv)))
+            # print("[CMT] num_background_keypoints is {}".format(len(background_keypoints_cv)))
             background_keypoints_cv, background_features = self.descriptor.compute(gray, background_keypoints_cv)
             _ = util.keypoints_cv_to_np(background_keypoints_cv)
 
@@ -135,8 +144,8 @@ class CMTTracker:
                 sorted_idx = np.argsort(self.classes_database)
                 idx = sorted_idx[np.searchsorted(self.classes_database[sorted_idx], self.removeClasses)]
                 self.classes_database[idx] = 0
-            # print('4. self.selected_classes:', self.selected_classes)
-            # print('5. self.classes_database:', self.classes_database)
+            # print('[CMT] self.selected_classes:', self.selected_classes)
+            # print('[CMT] self.classes_database:', self.classes_database)
 
         (center, scale_estimate, rotation_estimate, tracked_keypoints) = self.estimate(tracked_keypoints)
 
@@ -170,24 +179,27 @@ class CMTTracker:
                 classes = self.classes_database
 
                 # Get best and second best index
-                bestInd = matches[0].trainIdx
-                secondBestInd = matches[1].trainIdx
+                try:
+                    bestInd = matches[0].trainIdx
+                    secondBestInd = matches[1].trainIdx
+                except Exception as e:
+                    print(len(matches))
 
                 # Compute distance ratio according to Lowe
                 try:
                     ratio = (1 - combined[0]) / (1 - combined[1])
                 except:
                     print(combined)
-                # print('Pts {}: Distance {} => combined {}: ratio{}'.format(location, distances, combined, ratio))
+                # print('[CMT] Pts {}: Distance {} => combined {}: ratio{}'.format(location, distances, combined, ratio))
 
                 # Extract class of best match
                 keypoint_class = classes[bestInd]
-                # print("{}: Class[{}] => {}, Class[{}] => {}".format(i, bestInd, keypoint_class, secondBestInd, classes[secondBestInd]))
-                # print('{}: Pts {}: Distance {} => combined {}: ratio: {}'.format(i, location, distances, combined, ratio))
+                # print("[CMT] {}: Class[{}] => {}, Class[{}] => {}".format(i, bestInd, keypoint_class, secondBestInd, classes[secondBestInd]))
+                # print('[CMT] {}: Pts {}: Distance {} => combined {}: ratio: {}'.format(i, location, distances, combined, ratio))
 
                 # If distance ratio is ok and absolute distance is ok and keypoint class is not background
                 if ratio < self.THR_RATIO and combined[0] > self.THR_CONF and keypoint_class != 0:
-                    # print('{}: {}: combined {}: ratio: {}, Class[{}] => {}'.format(i, location, combined[0], ratio, bestInd, keypoint_class))
+                    # print('[CMT] {}: {}: combined {}: ratio: {}, Class[{}] => {}'.format(i, location, combined[0], ratio, bestInd, keypoint_class))
                     # Add keypoint to active keypoints
                     new_kpt = np.append(location, keypoint_class)
                     active_keypoints = np.append(active_keypoints, np.array([new_kpt]), axis=0)
@@ -263,7 +275,7 @@ class CMTTracker:
             if np.sqrt(np.power(center - adjusted_center, 2).sum()) > 10: # need to adjust
                 self.adjust_flag = True
                 center = adjusted_center
-                # print("Adjust center, springs and center_to_tl(tr, br, bl)")
+                # print("[CMT] Adjust center, springs and center_to_tl(tr, br, bl)")
 
         self.center = center
         self.scale_estimate = scale_estimate
@@ -339,23 +351,24 @@ class CMTTracker:
                 dists_mean = np.mean(np.sort(dists)[-4:])
             else:
                 dists_mean = np.mean(dists)
-            # print(dists, dists_mean, sep = " => ")
+            # print("[CMT] {} => {}".format(dists, dists_mean))
 
-            # DISPLAMENT = 0.3
-            # TAGET_CRITERIA = 0.1
-            #
-            # if dists_mean > DISPLAMENT:
-            #     conditions = dists < TAGET_CRITERIA
-            #     # print("배제될 조건:", conditions)
-            #     wrong_selected = keypoints_tracked[conditions, 2]
-            #
-            #     if wrong_selected.size > 0:
-            #         # print("1. wrong_selected:", wrong_selected)
-            #         conditions = dists >= TAGET_CRITERIA
-            #         # print("살아남을 조건:", conditions)
-            #         # print('2. keypoints_tracked(by classes):', keypoints_tracked[:, 2])
-            #         keypoints_tracked = keypoints_tracked[conditions, :]
-            #         # print('3. keypoints_tracked(by classes) after filter:', keypoints_tracked[:, 2])
+            if self.best_effort is True:
+                DISPLAMENT = 0.3
+                TAGET_CRITERIA = 0.1
+
+                if dists_mean > DISPLAMENT:
+                    conditions = dists < TAGET_CRITERIA
+                    # print("[CMT] 배제될 조건:", conditions)
+                    wrong_selected = keypoints_tracked[conditions, 2]
+
+                    if wrong_selected.size > 0:
+                        # print("[CMT] wrong_selected:", wrong_selected)
+                        conditions = dists >= TAGET_CRITERIA
+                        # print("[CMT] 살아남을 조건:", conditions)
+                        # print('[CMT] keypoints_tracked(by classes):', keypoints_tracked[:, 2])
+                        keypoints_tracked = keypoints_tracked[conditions, :]
+                        # print('[CMT] keypoints_tracked(by classes) after filter:', keypoints_tracked[:, 2])
 
         else:
             keypoints_tracked = np.zeros((0,3))
@@ -371,7 +384,7 @@ class CMTTracker:
         if len(keypoints) > 1:
             # Extract the keypoint classes
             keypoint_classes = keypoints[:, 2].squeeze().astype(np.int)
-            # print(keypoint_classes.shape, keypoint_classes)
+            # print("[CMT]", keypoint_classes.shape, keypoint_classes)
 
             # Retain singular dimension
             if keypoint_classes.size == 1:
@@ -474,9 +487,11 @@ class CMTTracker:
 
                 # Compute object center
                 center = np.mean(votes, axis=0)
-			# else:
-			# 	print("All are duplicate.")
-        # else:
-        # 	print("At least 2 Keypoints are required for estimation.")
+            else:
+                self.num_of_failure += 1
+                # print("[CMT] All are duplicate.")
+        else:
+            self.num_of_failure += 1
+            # print("[CMT] At least 2 Keypoints are required for estimation.")
 
         return (center, scale_estimate, med_rot, keypoints)
