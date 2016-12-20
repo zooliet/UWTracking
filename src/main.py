@@ -544,7 +544,7 @@ while fps._numFrames < args["num_frames"]:
 
                         else: # normalized_distance_from_cmt < 0.1 and normalized_distance_from_kcf < 0.1:
                             if area_ratio >= 4.0 or kcf_tracker.area > 180000:
-                                print("[KCF/CMT] kcf is as large as {:.02f} => kcf_init_with_shrink".format(area_ratio))
+                                print("[KCF/CMT] kcf is as large as {:.02f} => kcf_init_with_cmt".format(area_ratio))
                                 kcf_init_with_cmt = True
                             elif area_ratio < 0.25:
                                 print("[KCF/CMT] cmt is as large as {:.02f} => cmt_init_with_kcf".format(1/area_ratio))
@@ -580,12 +580,44 @@ while fps._numFrames < args["num_frames"]:
                             cmt_tracker.y2 = kcf_tracker.y2
                             cmt_tracker.force_init_flag = True
 
+
                 if args['serial'] and zoom_is_moving_flag is not True:
                     motor_driving_flag = False
+                    zoom_driving_flag = False
 
                     if kcf_tracker and kcf_peak_value > 0.2:
                         cX, cY = kcf_tracker.center
                         motor_driving_flag = True
+
+                        # zoom_idx: 0 ~ 6
+                        # current_zoom = zooms[zoom_idx]: 1,2,4,8,12,16,20
+                        lenth_by_zoom = [1, 1.41, 2, 2.83, 3.46. 4, 4.47]
+
+                        zoom_in_idx = zoom_idx + 1 if zoom_idx < 6 else 6
+                        zoom_out_idx = zoom_idx - 1 if zoom_idx > 0 else 0
+
+                        zoom_in_width = kcf_tracker.mean_width * (lengh_by_zoom[zoom_in_idx]/lengh_by_zoom[zoom_idx])
+                        zoom_out_width = kcf_tracker.mean_width * (lengh_by_zoom[zoom_out_idx]/lengh_by_zoom[zoom_idx])
+
+                        if zoom_in_width < 480:
+                            next_zoom_idx = zoom_in_idx
+                        elif kcf_tracker.mean_width >= 480:
+                            next_zoom_idx = zoom_out_width
+                        else:
+                            next_zoom_idx = zoom_idx
+
+                        if zoom_idx != next_zoom_idx:
+                            zoom_driving_flag = True
+
+                        # 아래 if motor_driving_flag is True 다음에 아래 루틴을 추가
+                        # next_zoom_idx, length_by_zoom, zoom_driving_flag의 scope 주의 
+                        # if zoom_driving_flag is True:
+                        #     zoom_idx += next_zoom_idx
+                        #     current_zoom = zooms[zoom_idx]
+                        #     zoom.zoom_to(current_zoom)
+                        #     zoom_is_moving_flag = True
+                        #     zoom_timer = Timer(1, zoom_has_finished_moving, args = [False])
+                        #     zoom_timer.start()
 
                     elif color_tracker and color_tracker.consecutive_lost < color_tracker.FOUND_CONDITION:
                         cX, cY = color_tracker.center

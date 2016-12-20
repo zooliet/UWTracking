@@ -168,7 +168,7 @@ class Motor:
             print("[MOTOR] Pixel: ({},{}) => Pulse: ({},{}) => [{},{}]".format(center_to_x, center_to_y, x_to, y_to, x_pulses, y_pulses))
 
             for (x_pulse, y_pulse) in zip(x_pulses, y_pulses):
-                self.move(x = x_pulse, y = y_pulse, z = 0, f = 0, t = MOVING_TIME)
+                self.move(x = x_pulse, y = y_pulse, z = 0, f = 0, t = self.MOVING_TIME)
 
             t_sec = self.MOVING_TIME * self.MOVING_STEP
 
