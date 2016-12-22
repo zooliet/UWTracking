@@ -236,8 +236,8 @@ while fps._numFrames < args["num_frames"]:
                     if args['serial'] and zoom_is_moving_flag is not True:
                         centerX = (tracking_window['x1'] + tracking_window['x2']) // 2
                         centerY = (tracking_window['y1'] + tracking_window['y2']) // 2
-                        center_to_x = centerX - HALF_WIDTH
-                        center_to_y = HALF_HEIGHT - centerY
+                        center_to_x = HALF_WIDTH - centerX
+                        center_to_y = centerY - HALF_HEIGHT
 
                         motor_timer = Timer(1, motor_has_finished_moving, args = [False])
                         (x_to, y_to, z_to, f_to) = motor.pixel_to_pulse(center_to_x, center_to_y, current_zoom, limit = False)
@@ -591,7 +591,7 @@ while fps._numFrames < args["num_frames"]:
 
                         # zoom_idx: 0 ~ 6
                         # current_zoom = zooms[zoom_idx]: 1,2,4,8,12,16,20
-                        lenth_by_zoom = [1, 1.41, 2, 2.83, 3.46. 4, 4.47]
+                        lenth_by_zoom = [1, 1.41, 2, 2.83, 3.46, 4, 4.47]
 
                         zoom_in_idx = zoom_idx + 1 if zoom_idx < 6 else 6
                         zoom_out_idx = zoom_idx - 1 if zoom_idx > 0 else 0
@@ -610,7 +610,7 @@ while fps._numFrames < args["num_frames"]:
                             zoom_driving_flag = True
 
                         # 아래 if motor_driving_flag is True 다음에 아래 루틴을 추가
-                        # next_zoom_idx, length_by_zoom, zoom_driving_flag의 scope 주의 
+                        # next_zoom_idx, length_by_zoom, zoom_driving_flag의 scope 주의
                         # if zoom_driving_flag is True:
                         #     zoom_idx += next_zoom_idx
                         #     current_zoom = zooms[zoom_idx]
@@ -633,8 +633,8 @@ while fps._numFrames < args["num_frames"]:
 
                     if motor_driving_flag is True:
                         # cv2.drawMarker(frame, (cX, cY), (0,0,255))
-                        center_to_x = cX - HALF_WIDTH
-                        center_to_y = HALF_HEIGHT - cY
+                        center_to_x = HALF_WIDTH - cX
+                        center_to_y = cY - HALF_HEIGHT
                         # print("[MOTOR] Distance from Center: ({}px, {}px)".format(center_to_x, center_to_y))
 
                         # 모터가 움직이는 동안 추적을 할 것인가 말것인가를 아래에서 결정
