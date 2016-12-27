@@ -10,8 +10,14 @@ class ColorTracker():
     FOUND_CONDITION = 1
 
     def __init__(self):
+        # red
         self.lower = np.array([0, 150, 100], dtype = "uint8")
         self.upper = np.array([5, 255, 255], dtype = "uint8")
+        # self.lower = np.array([165, 90, 90], dtype = "uint8")
+        # self.upper = np.array([180, 255, 255], dtype = "uint8")
+        # yellow
+        # self.lower = np.array([15, 120, 120], dtype = "uint8")
+        # self.upper = np.array([35, 255, 255], dtype = "uint8")
     def init(self, frame, options):
         x1 = options['x1']
         x2 = options['x2']
@@ -20,7 +26,7 @@ class ColorTracker():
         self.consecutive_lost = 0
 
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        hsv[:,:,2] = cv2.equalizeHist(hsv[:,:,2])
+        # hsv[:,:,2] = cv2.equalizeHist(hsv[:,:,2])
 
         mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
         cv2.rectangle(mask, (x1, y1), (x2, y2), 255, -1)
@@ -60,7 +66,7 @@ class ColorTracker():
         y2 = options['y2']
 
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        hsv[:,:,2] = cv2.equalizeHist(hsv[:,:,2])
+        # hsv[:,:,2] = cv2.equalizeHist(hsv[:,:,2])
 
         mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
         cv2.rectangle(mask, (x1, y1), (x2, y2), 255, -1)
