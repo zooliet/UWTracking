@@ -30,6 +30,10 @@ import datetime
 from utils import common
 from utils import util
 
+import os
+import glob
+import re
+
 # from numpy import isnan
 # import redis
 
@@ -86,6 +90,7 @@ capture = None
 tracking_window = {'x1': -1, 'y1': -1, 'x2': -1, 'y2': -1, 'dragging': False, 'start': False}
 motor_is_moving_flag = False
 zoom_is_moving_flag = False
+fifo_enable_flag = False
 
 zooms = [1,2,4,8,12,16,20]
 zoom_idx = 0
@@ -739,7 +744,11 @@ while fps._numFrames < args["num_frames"]:
 
             # pause가 아닌 상태에서 Tracking window 보이기(당연),
             # 그런데 pause 일때 굳이 동작 않도록 처리한 이유는? => pause 일때 마우스 조작이 일어나는 경우에 대처하기 위해, 즉, 다른곳에서 윈도우 처리
-            if pause_flag is False: cv2.imshow("Tracking", frame)
+            if pause_flag is False:
+                cv2.imshow("Tracking", frame)
+                if fifo_enable_flag is True:
+                    fifo.write(frame)
+
 
         key = cv2.waitKey(1)
         if key == 27 or key == ord('q'):
@@ -753,6 +762,28 @@ while fps._numFrames < args["num_frames"]:
                 kcf_tracker.force_init_flag = True
             if args['cmt']:
                 cmt_tracker.force_init_flag = True
+        elif key == ord('f'):
+            fifo_enable_flag = not fifo_enable_flag
+            if fifo_enable_flag is True:
+                print('[FIFO] Enabled')
+                fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
+                if not os.path.exists('captures'):
+                    os.makedirs('captures')
+                files = glob.glob('captures/capture-*.mkv')
+                if len(files) > 0:
+                    files.sort()
+                    last_file = files[-1]
+                    last_num = re.findall(r"[0-9]{4}", last_file)[0]
+                    last_num = int(last_num)
+                    pic_num = last_num + 1
+                else:
+                    pic_num = 0
+
+                file_name =  "captures/capture-{:04d}.mkv".format(pic_num)
+                fifo = cv2.VideoWriter(file_name, fourcc, 20.0, (frame.shape[1], frame.shape[0]))
+            else:
+                print('[FIFO] Disabled')
+
         elif key == 65362: # 'up', 63232 for Mac
             if zoom_is_moving_flag is not True and current_zoom < 20:
                 zoom_idx += 1
