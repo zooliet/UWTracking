@@ -661,12 +661,12 @@ while fps._numFrames < args["num_frames"]:
                         if zWidth / WIDTH >= zHeight / HEIGHT:
                             zoom_in_length = zWidth * (normalized_length[zoom_in_idx]/normalized_length[zoom_idx])
                             zoom_out_length = zWidth * (normalized_length[zoom_out_idx]/normalized_length[zoom_idx])
-                            max_length = WIDTH * 0.5
+                            max_length = WIDTH * 0.25
                             selected_length = zWidth
                         else:
                             zoom_in_length = zHeight * (normalized_length[zoom_in_idx]/normalized_length[zoom_idx])
                             zoom_out_length = zHeight * (normalized_length[zoom_out_idx]/normalized_length[zoom_idx])
-                            max_length = HEIGHT * 0.5
+                            max_length = HEIGHT * 0.25
                             selected_length = zHeight
 
                         # max_length = 160

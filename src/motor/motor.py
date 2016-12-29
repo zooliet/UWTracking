@@ -164,6 +164,9 @@ class Motor:
         return x, y, z, f
 
     def track(self, center_to_x, center_to_y, current_zoom):
+        # k와 SPEEDS와 MAX_MOVING_TIME 관계: k=32, SPEEDS=60000, MAX_MOVING_TIME=0.1
+
+        k = 32
         # if abs(center_to_x) <= self.MIN_REQUIRED_PIXEL_FOR_X:
         #     center_to_x = 0
         #
@@ -171,7 +174,7 @@ class Motor:
         #     center_to_y = 0
 
         # do_not_move_conditions = [0, 8, 16, 0, 24, 0, 0, 0, 36, 0, 0, 0, 64, 0, 0, 0, 46, 0, 0, 0, 8]
-        do_not_move_conditions = [0, 8, 8, 0, 8, 0, 0, 0, 8, 0, 0, 0, 8, 0, 0, 0, 8, 0, 0, 0, 8]
+        do_not_move_conditions = [0, k, k, 0, k, 0, 0, 0, k, 0, 0, 0, k, 0, 0, 0, k, 0, 0, 0, k]
 
         if abs(center_to_x) <= do_not_move_conditions[current_zoom]:
             center_to_x = 0
@@ -188,11 +191,11 @@ class Motor:
             # SPEED = 12000 # full speed: 120000, half speed: 600000
 
             # SPEEDS = [0, 12000, 5376, 0, 2851, 0, 0, 0, 1507, 0, 0, 0, 998, 0, 0, 0, 758, 0, 0, 0, 672]
-            SPEEDS = list(map(lambda idx: int(48000 * self.FOVS[idx-1][0]/self.FOVS[0][0]), list(range(0,21))))
+            SPEEDS = list(map(lambda idx: int(60000 * self.FOVS[idx-1][0]/self.FOVS[0][0]), list(range(0,21))))
             # print(SPEEDS)
             SPEED = SPEEDS[current_zoom]
 
-            MAX_MOVING_TIME = 0.5 # 0.1 for 100 ms
+            MAX_MOVING_TIME = 0.1 # 0.1 for 100 ms
             d = max(abs(x_to), abs(y_to))
             t_sec = d / SPEED
 
@@ -201,17 +204,17 @@ class Motor:
                 y_to = int(y_to * (MAX_MOVING_TIME / t_sec))
                 t_sec = MAX_MOVING_TIME
             else:
-                if x_to > 8:
-                    x_to -= 8
-                elif x_to < -8:
-                    x_to += 8
+                if x_to > k:
+                    x_to -= k
+                elif x_to < -k:
+                    x_to += k
                 else:
                     x_to = 0
 
-                if y_to > 8:
-                    y_to -= 8
-                elif y_to < -8:
-                    y_to += 8
+                if y_to > k:
+                    y_to -= k
+                elif y_to < -k:
+                    y_to += k
                 else:
                     y_to = 0
 
