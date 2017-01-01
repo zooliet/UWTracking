@@ -291,10 +291,10 @@ class Motor:
         self.stop_zooming()
 
     def zoom_to(self, x):
-        # print('[ZOOM] to', x)
-        if x == 1:
+        print('[ZOOM] to', x)
+        if False: #x == 1:
             self.zoom_x1()
-        elif x == 20:
+        elif False: #x == 20:
             self.zoom_x20()
         else:
             zoom_to_preset = {1: 1, 2: 2, 4: 3, 8: 4, 16: 5} # zoom to preset
