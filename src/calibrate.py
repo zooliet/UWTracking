@@ -120,7 +120,7 @@ else:
     motor = None
 
 if args['zoom']:
-    zoom = Motor(dev = args['zoom'], baud = 2400)
+    zoom = Motor(dev = args['zoom'], baud = 115200)
     zoom.zoom_x1()
 else:
     zoom = None
