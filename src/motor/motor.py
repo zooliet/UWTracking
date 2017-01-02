@@ -42,7 +42,7 @@ class Motor:
             (3.2000/2, 1.8000/2), ] #20
 
     # serial: 16092601
-    FOVS = [(62.5000/2, 34.5000/2), #1
+    FOVS_16092601 = [(62.5000/2, 34.5000/2), #1
             (28.0000/2, 15.4560/2), #2
             (20.6666/2, 11.5000/2),
             (14.8500/2, 8.1972/2), #4
@@ -62,6 +62,27 @@ class Motor:
             (3.4444/2, 2.0294/2),
             (3.2632/2, 1.9167/2),
             (3.5000/2, 1.9320/2), ] #20
+
+    FOVS = [(62.5000/2, 34.5000/2), #1
+            (62.5000/4, 34.5000/4), #2
+            (0, 0),
+            (62.5000/8, 34.5000/8), #4
+            (0, 0),
+            (0, 0),
+            (0, 0),
+            (62.5000/16, 34.5000/16), #8
+            (0, 0),
+            (0, 0),
+            (0, 0),
+            (62.5000/24, 34.5000/24), #12
+            (0, 0),
+            (0, 0),
+            (0, 0),
+            (62.5000/32, 34.5000/32), #16
+            (0, 0),
+            (0, 0),
+            (0, 0),
+            (62.5000/40, 34.5000/40), ] #20
 
     WIDTH = 640  # 640x360, 1024x576, 1280x720, 1920x1080
     HEIGHT = WIDTH * 9 // 16
@@ -257,7 +278,7 @@ class Motor:
         bstr = bytes(buffer)
         self.port.write(bstr)
 
-    def zoom(self, x, direction):
+    def zoom(self, direction):
         if direction == 'in':
             buffer = [0xff,0x01,0x00,0x20,0x00,0x00,0x21]
             bstr = bytes(buffer)
@@ -266,6 +287,8 @@ class Motor:
             buffer = [0xff,0x01,0x00,0x40,0x00,0x00,0x41]
             bstr = bytes(buffer)
             self.port.write(bstr)
+        time.sleep(0.1)
+        self.stop_zooming()
 
     def zoom_to(self, x):
         # print('[ZOOM] to', x)
@@ -274,7 +297,7 @@ class Motor:
         elif x == 20:
             self.zoom_x20()
         else:
-            zoom_to_preset = {2: 1, 4: 2, 8: 3, 12: 4, 16: 5} # zoom to preset
+            zoom_to_preset = {1: 1, 2: 2, 4: 3, 8: 4, 16: 5} # zoom to preset
             preset = zoom_to_preset[x]
 
             buffer = [0xff,0x01,0x00,0x07,0x00,preset,0x00]
@@ -291,4 +314,15 @@ class Motor:
         buffer = [0xff,0x01,0x00,0x00,0x00,0x00,0x01]
         bstr = bytes(buffer)
         self.port.write(bstr)
-        # time.sleep(0.1)
+        time.sleep(0.1)
+
+    def set_preset(self, num):
+        buffer = [0xff,0x01,0x00,0x03,0x00,num,0x00]
+        checksum = 0
+        for el in buffer[1: -1]:
+            checksum += el
+
+        checksum = checksum % 256
+        buffer[-1] = checksum
+        bstr = bytes(buffer)
+        self.port.write(bstr)
