@@ -70,7 +70,7 @@ zooms = [1,2,4,8,16]
 zoom_idx = 0
 current_zoom = zooms[zoom_idx]
 color_select_flag = False
-
+set_preset_flag = False
 
 def motor_has_finished_moving(args):
     global motor_is_moving_flag
@@ -195,7 +195,7 @@ while True:
                     #
                     # # upper[0][0] =  upper[0][0] % 180
                     # print("Lower: {}, Upper: {}".format(lower, upper))
-                elif args['serial'] and zoom_is_moving_flag is not True:
+                elif args['serial'] and motor_is_moving_flag is not True and zoom_is_moving_flag is not True:
                     centerX = (tracking_window['x1'] + tracking_window['x2']) // 2
                     centerY = (tracking_window['y1'] + tracking_window['y2']) // 2
                     center_to_x = HALF_WIDTH - centerX
@@ -214,7 +214,7 @@ while True:
         cv2.line(frame, (HALF_WIDTH, 0), (HALF_WIDTH, WIDTH), (200, 200, 200), 0)
         cv2.line(frame, (0, HALF_HEIGHT), (WIDTH, HALF_HEIGHT), (200, 200, 200), 0)
 
-        if True:
+        if set_preset_flag is True:
             x = 8
             k = x * 1
             x1 = int(HALF_WIDTH-(WIDTH/k))
@@ -223,33 +223,33 @@ while True:
             y2 = int(HALF_HEIGHT+(HEIGHT/k))
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 0)
 
-            # k = x * 2
-            # x1 = int(HALF_WIDTH-(WIDTH/k))
-            # y1 = int(HALF_HEIGHT-(HEIGHT/k))
-            # x2 = int(HALF_WIDTH+(WIDTH/k))
-            # y2 = int(HALF_HEIGHT+(HEIGHT/k))
-            # cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 0)
-            #
-            # k = x * 4
-            # x1 = int(HALF_WIDTH-(WIDTH/k))
-            # y1 = int(HALF_HEIGHT-(HEIGHT/k))
-            # x2 = int(HALF_WIDTH+(WIDTH/k))
-            # y2 = int(HALF_HEIGHT+(HEIGHT/k))
-            # cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 0)
-            #
-            # k = x * 8
-            # x1 = int(HALF_WIDTH-(WIDTH/k))
-            # y1 = int(HALF_HEIGHT-(HEIGHT/k))
-            # x2 = int(HALF_WIDTH+(WIDTH/k))
-            # y2 = int(HALF_HEIGHT+(HEIGHT/k))
-            # cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 0)
-            #
-            # k = x * 16
-            # x1 = int(HALF_WIDTH-(WIDTH/k))
-            # y1 = int(HALF_HEIGHT-(HEIGHT/k))
-            # x2 = int(HALF_WIDTH+(WIDTH/k))
-            # y2 = int(HALF_HEIGHT+(HEIGHT/k))
-            # cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 0)
+            k = x * 2
+            x1 = int(HALF_WIDTH-(WIDTH/k))
+            y1 = int(HALF_HEIGHT-(HEIGHT/k))
+            x2 = int(HALF_WIDTH+(WIDTH/k))
+            y2 = int(HALF_HEIGHT+(HEIGHT/k))
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 0)
+
+            k = x * 4
+            x1 = int(HALF_WIDTH-(WIDTH/k))
+            y1 = int(HALF_HEIGHT-(HEIGHT/k))
+            x2 = int(HALF_WIDTH+(WIDTH/k))
+            y2 = int(HALF_HEIGHT+(HEIGHT/k))
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 0)
+
+            k = x * 8
+            x1 = int(HALF_WIDTH-(WIDTH/k))
+            y1 = int(HALF_HEIGHT-(HEIGHT/k))
+            x2 = int(HALF_WIDTH+(WIDTH/k))
+            y2 = int(HALF_HEIGHT+(HEIGHT/k))
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 0)
+
+            k = x * 16
+            x1 = int(HALF_WIDTH-(WIDTH/k))
+            y1 = int(HALF_HEIGHT-(HEIGHT/k))
+            x2 = int(HALF_WIDTH+(WIDTH/k))
+            y2 = int(HALF_HEIGHT+(HEIGHT/k))
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 0)
 
         if tracking_window['dragging'] == True:
             pt1 = (tracking_window['x1'], tracking_window['y1'])
@@ -296,9 +296,14 @@ while True:
         else:
             print('[FIFO] Disabled')
 
+    elif key == ord('p'):
+        set_preset_flag = not set_preset_flag
     elif key >= ord('1') and key <= ord('5'):
         preset = key - 48
-        zoom.set_preset(preset)
+        if set_preset_flag is True:
+            zoom.set_preset(preset)
+        else:
+            zoom.get_preset(preset)
     elif key == 65362: # 'up', 63232 for Mac
         if zoom_is_moving_flag is not True and current_zoom < 16:
             zoom_idx += 1

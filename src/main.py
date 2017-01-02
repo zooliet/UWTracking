@@ -94,7 +94,6 @@ zooms = [1,2,4,8,16]
 zoom_idx = 0
 current_zoom = zooms[zoom_idx]
 show_lap_time_flag = False
-color_select_flag = False
 zoom_check_flag = False
 
 def motor_has_finished_moving(args):
@@ -185,7 +184,6 @@ if cmt_tracker:
     cmt_tracker.detector = detector
     cmt_tracker.descriptor = detector
 
-
 tic = time.time()
 toc = time.time()
 
@@ -248,36 +246,17 @@ while fps._numFrames < args["num_frames"]:
 
                         tracking_processing_flag = True # 초기화 결과에 상관없이 tracking 시작
 
-                else:
-                    if False: # color_select_flag:
-                        # hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-                        roi = frame[tracking_window['x1']-10:tracking_window['x1']+10, tracking_window['y1']-10:tracking_window['y1']+10]
-                        (means, stds) = cv2.meanStdDev(roi)
-                        print('Mean:', means)
-                        print('Std Dev:', stds)
+                elif args['serial'] and motor_is_moving_flag is not True and zoom_is_moving_flag is not True:
+                    centerX = (tracking_window['x1'] + tracking_window['x2']) // 2
+                    centerY = (tracking_window['y1'] + tracking_window['y2']) // 2
+                    center_to_x = HALF_WIDTH - centerX
+                    center_to_y = centerY - HALF_HEIGHT
 
-                        # print("[INFO] HSV means: {}, stds: {}".format(means, stds))
-                        # print("H:{:03d}±{:02d}, S:{:03d}±{:02d}, V:{:03d}±{:02d}".
-                        # format(int(means[0,0]), int(stds[0,0]), int(means[1,0]), int(stds[1,0]), int(means[2,0]), int(stds[2,0])))
-                        #
-                        # lower = cv2.subtract(np.uint8([means]), np.uint8([stds]))
-                        # upper = cv2.add(np.uint8([means]), np.uint8([stds]))
-                        #
-                        # # upper[0][0] =  upper[0][0] % 180
-                        # print("Lower: {}, Upper: {}".format(lower, upper))
-
-
-                    elif args['serial'] and motor_is_moving_flag is not True and zoom_is_moving_flag is not True:
-                        centerX = (tracking_window['x1'] + tracking_window['x2']) // 2
-                        centerY = (tracking_window['y1'] + tracking_window['y2']) // 2
-                        center_to_x = HALF_WIDTH - centerX
-                        center_to_y = centerY - HALF_HEIGHT
-
-                        motor_timer = Timer(1, motor_has_finished_moving, args = [False])
-                        (x_to, y_to, z_to, f_to) = motor.pixel_to_pulse(center_to_x, center_to_y, current_zoom, limit = False)
-                        motor.move(x = x_to, y = y_to, z = z_to, f = f_to, t = 1)
-                        motor_timer.start()
-                        motor_is_moving_flag = True
+                    motor_timer = Timer(1, motor_has_finished_moving, args = [False])
+                    (x_to, y_to, z_to, f_to) = motor.pixel_to_pulse(center_to_x, center_to_y, current_zoom, limit = False)
+                    motor.move(x = x_to, y = y_to, z = z_to, f = f_to, t = 1)
+                    motor_timer.start()
+                    motor_is_moving_flag = True
 
                 capture = None
                 tracking_window['start'] = False
@@ -708,10 +687,6 @@ while fps._numFrames < args["num_frames"]:
                         center_to_y = cY - HALF_HEIGHT
                         # print("[MOTOR] Distance from Center: ({}px, {}px)".format(center_to_x, center_to_y))
 
-                        # 모터가 움직이는 동안 추적을 할 것인가 말것인가를 아래에서 결정
-                        # (1) 모터 움직일 동안 motor_is_moving_flag을 lock 시켜서 추적을 안하는 방안
-                        # (2) motor_is_moving_flag을 아예 셋팅하지 않고 추적을 계속하는 방안
-
                         # case (1)
                         # print("Move to ({}px, {}px)".format(center_to_x, center_to_y))
                         t_sec = motor.track(center_to_x, center_to_y, current_zoom)
@@ -720,9 +695,6 @@ while fps._numFrames < args["num_frames"]:
                             motor_is_moving_flag = True
                             motor_timer = Timer(t_sec, motor_has_finished_moving, args = [False])
                             motor_timer.start()
-
-                            # or case (2)
-                            # t_sec = motor.track(center_to_x, center_to_y, current_zoom)
 
 
             cv2.line(frame, (HALF_WIDTH, 0), (HALF_WIDTH, WIDTH), (200, 200, 200), 0)
@@ -819,9 +791,6 @@ while fps._numFrames < args["num_frames"]:
             if args['serial']:
                 motor.sum_of_x_degree = motor.sum_of_y_degree = 0
 
-        elif key == ord('c'):
-            if args['color']:
-                color_select_flag = not color_select_flag
 
         # pause가 아니면 prev_hash를 갱신함 (당연),
         # 반대로 pause일때는 갱신하지 않음으로 prev_hash와 frame_hash를 불일치 시킴. Why? pause에도 key 입력 루틴을 실행하기 위한 의도적인 조치임

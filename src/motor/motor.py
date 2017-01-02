@@ -99,8 +99,6 @@ class Motor:
     WEIGHTS_TOTAL = sum(WEIGHTS)
     MOVING_STEP = len(WEIGHTS)
 
-    MIN_REQUIRED_PIXEL_FOR_X = 4 # [4, 8, 10, 10
-    MIN_REQUIRED_PIXEL_FOR_Y = 4 #4, 8
 
     SPEEDS = [12000, 5376, 2851, 1507, 998, 758, 672]
     # list(map(lambda idx: int(12000 * self.FOVS[idx-1][0]/self.FOVS[0][0]), [1,2,4,8,12,16,20]))
@@ -187,21 +185,14 @@ class Motor:
     def track(self, center_to_x, center_to_y, current_zoom):
         # k와 SPEEDS와 MAX_MOVING_TIME 관계: k=32, SPEEDS=60000, MAX_MOVING_TIME=0.1
 
-        k = 32
-        # if abs(center_to_x) <= self.MIN_REQUIRED_PIXEL_FOR_X:
+        k = 64
+        do_not_move_conditions = [0, k, k, 0, k, 0, 0, 0, k, 0, 0, 0, 0, 0, 0, 0, k, 0, 0, 0, 0]
+
+        # if abs(center_to_x) <= do_not_move_conditions[current_zoom]:
         #     center_to_x = 0
         #
-        # if abs(center_to_y) <= self.MIN_REQUIRED_PIXEL_FOR_Y:
+        # if abs(center_to_y) <= do_not_move_conditions[current_zoom]:
         #     center_to_y = 0
-
-        # do_not_move_conditions = [0, 8, 16, 0, 24, 0, 0, 0, 36, 0, 0, 0, 64, 0, 0, 0, 46, 0, 0, 0, 8]
-        do_not_move_conditions = [0, k, k, 0, k, 0, 0, 0, k, 0, 0, 0, k, 0, 0, 0, k, 0, 0, 0, k]
-
-        if abs(center_to_x) <= do_not_move_conditions[current_zoom]:
-            center_to_x = 0
-
-        if abs(center_to_y) <= do_not_move_conditions[current_zoom]:
-            center_to_y = 0
 
         if center_to_x == 0 and center_to_y == 0:
             t_sec = 0
@@ -210,12 +201,9 @@ class Motor:
 
             # 예전에 쓰던 알고리즘:
             # SPEED = 12000 # full speed: 120000, half speed: 600000
-
-            # SPEEDS = [0, 12000, 5376, 0, 2851, 0, 0, 0, 1507, 0, 0, 0, 998, 0, 0, 0, 758, 0, 0, 0, 672]
             SPEEDS = list(map(lambda idx: int(60000 * self.FOVS[idx-1][0]/self.FOVS[0][0]), list(range(0,21))))
             # print(SPEEDS)
             SPEED = SPEEDS[current_zoom]
-
             MAX_MOVING_TIME = 0.1 # 0.1 for 100 ms
             d = max(abs(x_to), abs(y_to))
             t_sec = d / SPEED
@@ -225,23 +213,33 @@ class Motor:
                 y_to = int(y_to * (MAX_MOVING_TIME / t_sec))
                 t_sec = MAX_MOVING_TIME
             else:
-                if x_to > k:
-                    x_to -= k
-                elif x_to < -k:
-                    x_to += k
+                if x_to > do_not_move_conditions[current_zoom] or x_to < -do_not_move_conditions[current_zoom]:
+                    x_to = int(x_to / 10)
+                # if x_to > do_not_move_conditions[current_zoom]:
+                #     x_to -= do_not_move_conditions[current_zoom]
+                # elif x_to < -do_not_move_conditions[current_zoom]:
+                #     x_to += do_not_move_conditions[current_zoom]
                 else:
                     x_to = 0
-
-                if y_to > k:
-                    y_to -= k
-                elif y_to < -k:
-                    y_to += k
+                #
+                if y_to > do_not_move_conditions[current_zoom] or y_to < -do_not_move_conditions[current_zoom]:
+                    y_to = int(y_to / 10)
+                # if y_to > do_not_move_conditions[current_zoom]:
+                #     y_to -= do_not_move_conditions[current_zoom]
+                # elif y_to < -do_not_move_conditions[current_zoom]:
+                #     y_to += do_not_move_conditions[current_zoom]
                 else:
                     y_to = 0
 
-                t_sec = MAX_MOVING_TIME
+                if y_to == 0 and x_to == 0:
+                    t_sec = 0
+
+
+
+                # t_sec = MAX_MOVING_TIME
                 # x_to = 0
                 # y_to = 0
+                # t_sec = 0
 
             self.move(x = x_to, y = y_to, z = z_to, f = f_to, t = t_sec)
 
@@ -318,6 +316,17 @@ class Motor:
 
     def set_preset(self, num):
         buffer = [0xff,0x01,0x00,0x03,0x00,num,0x00]
+        checksum = 0
+        for el in buffer[1: -1]:
+            checksum += el
+
+        checksum = checksum % 256
+        buffer[-1] = checksum
+        bstr = bytes(buffer)
+        self.port.write(bstr)
+
+    def get_preset(self, num):
+        buffer = [0xff,0x01,0x00,0x07,0x00,num,0x00]
         checksum = 0
         for el in buffer[1: -1]:
             checksum += el
