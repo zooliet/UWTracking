@@ -69,6 +69,8 @@ fifo_enable_flag = False
 zooms = [1,2,4,8,16]
 zoom_idx = 0
 current_zoom = zooms[zoom_idx]
+color_select_flag = False
+
 
 def motor_has_finished_moving(args):
     global motor_is_moving_flag
@@ -112,7 +114,12 @@ def onmouse(event, x, y, flags, param):
 
 if args["display"] is True:
     cv2.namedWindow('Tracking')
+    cv2.moveWindow('Tracking', 0, 0)
     cv2.setMouseCallback('Tracking', onmouse, tracking_window)
+
+
+def nothing(x):
+    pass
 
 if args['serial']:
     motor = Motor(dev = args['serial'], baud = 115200)
@@ -125,6 +132,10 @@ if args['zoom']:
 else:
     zoom = None
 
+# Initialize to check if HSV min/max value changes
+hMin = sMin = vMin = hMax = sMax = vMax = 0
+phMin = psMin = pvMin = phMax = psMax = pvMax = 0
+
 
 while True:
     if pause_flag is False:
@@ -132,24 +143,69 @@ while True:
         # frame = imutils.resize(frame, width = WIDTH)
         # print("[INFO] frame.shape: ", frame.shape)
 
+        if color_select_flag is True:
+            # get current positions of all trackbars
+            hMin = cv2.getTrackbarPos('HMin','Tracking')
+            sMin = cv2.getTrackbarPos('SMin','Tracking')
+            vMin = cv2.getTrackbarPos('VMin','Tracking')
+
+            hMax = cv2.getTrackbarPos('HMax','Tracking')
+            sMax = cv2.getTrackbarPos('SMax','Tracking')
+            vMax = cv2.getTrackbarPos('VMax','Tracking')
+
+            # Set minimum and max HSV values to display
+            lower = np.array([hMin, sMin, vMin])
+            upper = np.array([hMax, sMax, vMax])
+
+            # Create HSV Image and threshold into a range.
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            # hsv[:,:,2] = cv2.equalizeHist(hsv[:,:,2])
+            mask = cv2.inRange(hsv, lower, upper)
+            frame = cv2.bitwise_and(frame, frame, mask= mask)
+            # cv2.imshow('Output', output)
+
+            # Print if there is a change in HSV value
+            if( (phMin != hMin) | (psMin != sMin) | (pvMin != vMin) | (phMax != hMax) | (psMax != sMax) | (pvMax != vMax) ):
+                print("(hMin = {} , sMin = {}, vMin = {}), (hMax = {} , sMax = {}, vMax = {})".format(hMin , sMin , vMin, hMax, sMax , vMax))
+                phMin = hMin
+                psMin = sMin
+                pvMin = vMin
+                phMax = hMax
+                psMax = sMax
+                pvMax = vMax
+
+
         if tracking_window['start'] == True:
             if((tracking_window['x2'] - tracking_window['x1']) > MIN_SELECTION_WIDTH) and ((tracking_window['y2'] - tracking_window['y1']) > MIN_SELECTION_HEIGHT):
                 width = tracking_window['x2'] - tracking_window['x1']
                 height = tracking_window['y2'] - tracking_window['y1']
                 area = width * height
                 print("[Debug] Area:{}, Width: {}, Height: {} @ x{}".format(area, width, height, current_zoom))
+            else:
+                if False: # color_select_flag is True:
+                    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+                    roi = frame[tracking_window['x1']-10:tracking_window['x1']+10, tracking_window['y1']-10:tracking_window['y1']+10]
+                    (means, stds) = cv2.meanStdDev(roi)
+                    # print("[INFO] HSV means: {}, stds: {}".format(means, stds))
+                    print("H:{:03d}±{:02d}, S:{:03d}±{:02d}, V:{:03d}±{:02d}".
+                    format(int(means[0,0]), int(stds[0,0]), int(means[1,0]), int(stds[1,0]), int(means[2,0]), int(stds[2,0])))
+                    #
+                    # lower = cv2.subtract(np.uint8([means]), np.uint8([stds]))
+                    # upper = cv2.add(np.uint8([means]), np.uint8([stds]))
+                    #
+                    # # upper[0][0] =  upper[0][0] % 180
+                    # print("Lower: {}, Upper: {}".format(lower, upper))
+                elif args['serial'] and zoom_is_moving_flag is not True:
+                    centerX = (tracking_window['x1'] + tracking_window['x2']) // 2
+                    centerY = (tracking_window['y1'] + tracking_window['y2']) // 2
+                    center_to_x = HALF_WIDTH - centerX
+                    center_to_y = centerY - HALF_HEIGHT
 
-            elif args['serial'] and zoom_is_moving_flag is not True:
-                centerX = (tracking_window['x1'] + tracking_window['x2']) // 2
-                centerY = (tracking_window['y1'] + tracking_window['y2']) // 2
-                center_to_x = HALF_WIDTH - centerX
-                center_to_y = centerY - HALF_HEIGHT
-
-                motor_timer = Timer(1, motor_has_finished_moving, args = [False])
-                (x_to, y_to, z_to, f_to) = motor.pixel_to_pulse(center_to_x, center_to_y, current_zoom, limit = False)
-                motor.move(x = x_to, y = y_to, z = z_to, f = f_to, t = 1)
-                motor_timer.start()
-                motor_is_moving_flag = True
+                    motor_timer = Timer(1, motor_has_finished_moving, args = [False])
+                    (x_to, y_to, z_to, f_to) = motor.pixel_to_pulse(center_to_x, center_to_y, current_zoom, limit = False)
+                    motor.move(x = x_to, y = y_to, z = z_to, f = f_to, t = 1)
+                    motor_timer.start()
+                    motor_is_moving_flag = True
 
             capture = None
             tracking_window['start'] = False
@@ -279,3 +335,22 @@ while True:
             # zoom_timer = Timer(2.5, zoom_has_finished_moving, args = [False])
             # zoom_timer.start()
             zoom.zoom('in')
+    elif key == ord('c'):
+        color_select_flag = not color_select_flag
+        if color_select_flag is True:
+            # create trackbars for color change
+            cv2.createTrackbar('HMin','Tracking',0,179,nothing) # Hue is from 0-179 for Opencv
+            cv2.createTrackbar('SMin','Tracking',0,255,nothing)
+            cv2.createTrackbar('VMin','Tracking',0,255,nothing)
+            cv2.createTrackbar('HMax','Tracking',0,179,nothing)
+            cv2.createTrackbar('SMax','Tracking',0,255,nothing)
+            cv2.createTrackbar('VMax','Tracking',0,255,nothing)
+
+            # Set default value for MAX HSV trackbars.
+            cv2.setTrackbarPos('HMax', 'Tracking', 179)
+            cv2.setTrackbarPos('SMax', 'Tracking', 255)
+            cv2.setTrackbarPos('VMax', 'Tracking', 255)
+        else:
+            cv2.destroyWindow('Tracking')
+            cv2.namedWindow('Tracking')
+            cv2.moveWindow('Tracking', 0, 0)
