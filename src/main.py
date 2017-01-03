@@ -212,9 +212,9 @@ while fps._numFrames < args["num_frames"]:
 
                     if color_tracker:
                         if color_tracker.init(frame, options = tracking_window):
-                            print('[COLOR] Red Found at {}'.format(color_tracker.center))
+                            print('[COLOR] Color Found at {}'.format(color_tracker.center))
                         else:
-                            print('[COLOR] Red Not Found around at {}'.format(color_tracker.center))
+                            print('[COLOR] Color Not Found around at {}'.format(color_tracker.center))
                         tracking_processing_flag = True # 초기화 결과에 상관없이 tracking 시작
 
                     if cmt_tracker:
@@ -239,6 +239,10 @@ while fps._numFrames < args["num_frames"]:
                         kcf_tracker.y1 = tracking_window['y1']
                         kcf_tracker.x2 = tracking_window['x2']
                         kcf_tracker.y2 = tracking_window['y2']
+
+                        kcf_tracker.no_zoom_width = int(initial_width / current_zoom)
+                        kcf_tracker.no_zoom_height = int(initial_height / current_zoom)
+                        print("[KCF] No zoom width {} and height {}".format(kcf_tracker.no_zoom_width, kcf_tracker.no_zoom_height) )
 
                         #if you use hog feature, there will be a short pause after you draw a first boundingbox, that is due to the use of Numba.
                         kcf_tracker.init(frame)
@@ -268,12 +272,12 @@ while fps._numFrames < args["num_frames"]:
                     tic = toc
 
                 if color_tracker:
-                    # if kcf_tracker:
-                    #     color_tracker.update(frame,  {'x1': kcf_tracker.x1, 'y1':kcf_tracker.y1, 'x2': kcf_tracker.x2, 'y2': kcf_tracker.y2})
-                    # else:
-                    color_tracker.update(frame)
-                    if color_tracker.consecutive_lost < color_tracker.FOUND_CONDITION:
-                        cv2.drawMarker(frame, tuple(color_tracker.center), (255,0,0))
+                    if kcf_tracker and kcf_tracker.enable:
+                        color_tracker.update(frame,  {'x1': kcf_tracker.x1, 'y1':kcf_tracker.y1, 'x2': kcf_tracker.x2, 'y2': kcf_tracker.y2})
+                    else:
+                        color_tracker.update(frame)
+                    # if color_tracker.consecutive_lost < color_tracker.FOUND_CONDITION:
+                    #     cv2.drawMarker(frame, tuple(color_tracker.center), (255,0,0))
 
                 if cmt_tracker:
                     if cmt_tracker.force_init_flag is True:
@@ -417,89 +421,60 @@ while fps._numFrames < args["num_frames"]:
                         kcf_tracker.force_init_flag = False
                         kcf_tracker.init(frame)
                     else: # kcf_tracker.force_init_flag is not True:
-                        boundingbox, kcf_peak_value, loc = kcf_tracker.update(frame)
-                        boundingbox = list(map(int, boundingbox))
+                        if kcf_tracker.enable:
+                            boundingbox, kcf_peak_value, loc = kcf_tracker.update(frame)
+                            boundingbox = list(map(int, boundingbox))
 
-                        kcf_tracker.x1 = boundingbox[0]
-                        kcf_tracker.y1 = boundingbox[1]
-                        kcf_tracker.x2 = boundingbox[0] + boundingbox[2]
-                        kcf_tracker.y2 = boundingbox[1] + boundingbox[3]
-                        kcf_tracker.center = ((kcf_tracker.x1 + kcf_tracker.x2) // 2, (kcf_tracker.y1 + kcf_tracker.y2) // 2)
-                        kcf_tracker.area = int(boundingbox[2] * boundingbox[3])
+                            kcf_tracker.x1 = boundingbox[0]
+                            kcf_tracker.y1 = boundingbox[1]
+                            kcf_tracker.x2 = boundingbox[0] + boundingbox[2]
+                            kcf_tracker.y2 = boundingbox[1] + boundingbox[3]
+                            kcf_tracker.center = ((kcf_tracker.x1 + kcf_tracker.x2) // 2, (kcf_tracker.y1 + kcf_tracker.y2) // 2)
+                            kcf_tracker.area = int(boundingbox[2] * boundingbox[3])
 
-                        cv2.rectangle(frame,(kcf_tracker.x1,kcf_tracker.y1), (kcf_tracker.x2,kcf_tracker.y2), (0,255,0), 1)
-                        cv2.drawMarker(frame, tuple(kcf_tracker.center), (0,255,0))
-                        # print("[KCF] peak_value: {:.04f}".format(kcf_peak_value))
-
-                        # calulate averages for height, width, center
-                        kcf_tracker.prev_widths = np.append(kcf_tracker.prev_widths, boundingbox[2])
-                        kcf_tracker.prev_heights = np.append(kcf_tracker.prev_heights, boundingbox[3])
-
-                        if kcf_tracker.prev_widths.shape[0] > 10: #kcf_tracker.PREV_HISTORY_SIZE: # 100
-                            kcf_tracker.prev_widths = np.delete(kcf_tracker.prev_widths, (0), axis=0)
-                            kcf_tracker.prev_heights = np.delete(kcf_tracker.prev_heights, (0), axis=0)
-
-                        kcf_tracker.mean_width = np.round(np.mean(kcf_tracker.prev_widths)).astype(np.int)
-                        kcf_tracker.mean_height = np.round(np.mean(kcf_tracker.prev_heights)).astype(np.int)
-                        kcf_tracker.mean_area = int(kcf_tracker.mean_width * kcf_tracker.mean_height)
-
-                        str = "{}x{}({}x{})".format(kcf_tracker.mean_width, kcf_tracker.mean_height, initial_width, initial_height)
-                        util.draw_str(frame, (20, 20), str)
-
-                        if args['autozoom'] and zoom_is_moving_flag is not True:
-                            zoom_in_idx = zoom_idx + 1 if zoom_idx < 4 else 4
-                            zoom_out_idx = zoom_idx - 1 if zoom_idx > 0 else 0
-                            normalized_length = list(map(lambda idx: zoom.FOVS[0][0]/zoom.FOVS[idx-1][0], [1,2,4,8,16]))
-                            # print("[ZOOM] Ratio in length", list(map(lambda i: round(i, 2), normalized_length)))
-                            zoom_in_length = kcf_tracker.mean_width * (normalized_length[zoom_in_idx]/normalized_length[zoom_idx])
-                            zoom_out_length = kcf_tracker.mean_width * (normalized_length[zoom_out_idx]/normalized_length[zoom_idx])
-                            max_length = WIDTH * 0.25
-                            selected_length = kcf_tracker.mean_width
-                            # print("[ZOOM] Current: {:02.0f}, Zoom in: {:02.0f}, Zoom out: {:02.0f}".format(selected_length, zoom_in_length, zoom_out_length))
-
-                            if selected_length >= max_length + 20:
-                                next_zoom_idx = zoom_out_idx
-                            elif selected_length > 0 and zoom_in_length < max_length: # 줌인할 길이가 상한을 넘지 않은 경우에는 줌인
-                                next_zoom_idx = zoom_in_idx
-                            else:
-                                next_zoom_idx = zoom_idx
-
-                            if zoom_idx != next_zoom_idx:
-                                next_zoom = zooms[next_zoom_idx]
-                                print("[ZOOM] {} to {}".format(current_zoom, next_zoom))
-                                zoom_idx = next_zoom_idx
-                                current_zoom = zooms[zoom_idx]
-                                zoom.zoom_to(current_zoom)
-                                zoom_is_moving_flag = True
-                                zoom_timer = Timer(3, zoom_has_finished_moving, args = [False])
-                                zoom_timer.start()
+                            cv2.rectangle(frame,(kcf_tracker.x1,kcf_tracker.y1), (kcf_tracker.x2,kcf_tracker.y2), (0,255,0), 1)
+                            cv2.drawMarker(frame, tuple(kcf_tracker.center), (0,255,0))
+                            # print("[KCF] peak_value: {:.04f}".format(kcf_peak_value))
 
                     # print("[KCF/CMT] lost({}) vs found({})".format(kcf_tracker.consecutive_cmt_lost, kcf_tracker.consecutive_cmt_found))
-                    if color_tracker and color_tracker.consecutive_lost < color_tracker.FOUND_CONDITION:
-                        color_to_kcf_ratio =  int(kcf_tracker.mean_area / color_tracker.area)
+                    if color_tracker:
+                        if color_tracker.consecutive_lost < color_tracker.FOUND_CONDITION:
+                            if kcf_tracker.enable:
+                                diff_width = abs(color_tracker.center[0] - kcf_tracker.center[0])
+                                diff_height = abs(color_tracker.center[1] - kcf_tracker.center[1])
+                                if diff_width > boundingbox[2] // 6 or diff_height < boundingbox[3] // 6: # boundingbox[2] == width
+                                    # print("[KCF] Adjust center with color object")
+                                    # print("[KCF] Bounding({},{}) vs Mean({},{})".format(boundingbox[2], boundingbox[3], kcf_tracker.mean_width, kcf_tracker.mean_height))
+                                    kcf_tracker.x1 = color_tracker.center[0] - kcf_tracker.mean_width // 2
+                                    kcf_tracker.x2 = color_tracker.center[0] + kcf_tracker.mean_width // 2
+                                    kcf_tracker.y1 = int(color_tracker.center[1] - kcf_tracker.mean_height/ 4)
+                                    kcf_tracker.y2 = int(color_tracker.center[1] + kcf_tracker.mean_height * 3 / 4)
+                                    kcf_tracker.center = ((kcf_tracker.x1 + kcf_tracker.x2) // 2, (kcf_tracker.y1 + kcf_tracker.y2) // 2)
 
-                        try:
-                            color_to_kcf_ratios = np.append(color_to_kcf_ratios, color_to_kcf_ratio)
-                        except Exception as e:
-                            color_to_kcf_ratios = np.array([color_to_kcf_ratio])
+                                    kcf_tracker.force_init_flag = True
+                                    # pause_flag = True
+                            # else:
+                            #     if zoom_is_moving_flag is not True:
+                            #         print("[KCF] Enabled")
+                            #         kcf_tracker.enable = True
+                            #         kcf_tracker.x1 = color_tracker.center[0] - 40 #kcf_tracker.no_zoom_width // 2
+                            #         kcf_tracker.x2 = color_tracker.center[0] + 40 #kcf_tracker.no_zoom_width // 2
+                            #         kcf_tracker.y1 = int(color_tracker.center[1] - 30) # kcf_tracker.no_zoom_height/ 4)
+                            #         kcf_tracker.y2 = int(color_tracker.center[1] + 30) # kcf_tracker.no_zoom_height * 3 / 4)
+                            #         kcf_tracker.center = ((kcf_tracker.x1 + kcf_tracker.x2) // 2, (kcf_tracker.y1 + kcf_tracker.y2) // 2)
+                            #
+                            #         kcf_tracker.force_init_flag = True
 
-                        if color_to_kcf_ratios.shape[0] >  kcf_tracker.PREV_HISTORY_SIZE: # 100
-                            color_to_kcf_ratios = np.delete(color_to_kcf_ratios, (0), axis=0)
-
-                        color_to_kcf_mean_ratio = np.round(np.mean(color_to_kcf_ratios)).astype(np.int)
-                        # print("[KCF] C-to-K Ratio: {}(inst.) vs {}(avg.), Area: {}(inst.) vs {}(avg.)".format(color_to_kcf_ratio, color_to_kcf_mean_ratio, kcf_tracker.area, kcf_tracker.mean_area))
-
-                        diff_width = abs(color_tracker.center[0] - kcf_tracker.center[0])
-                        diff_height = abs(color_tracker.center[1] - kcf_tracker.center[1])
-                        if diff_width > boundingbox[2] // 6 or diff_height < boundingbox[3] // 6: # boundingbox[2] == width
-                            print("[KCF] Bounding({},{}) vs Mean({},{})".format(boundingbox[2], boundingbox[3], kcf_tracker.mean_width, kcf_tracker.mean_height))
-                            kcf_tracker.x1 = color_tracker.center[0] - kcf_tracker.mean_width // 2
-                            kcf_tracker.x2 = color_tracker.center[0] + kcf_tracker.mean_width // 2
-                            kcf_tracker.y1 = int(color_tracker.center[1] - kcf_tracker.mean_height/ 4)
-                            kcf_tracker.y2 = int(color_tracker.center[1] + kcf_tracker.mean_height * 3 / 4)
-                            kcf_tracker.force_init_flag = True
-                            kcf_tracker.center = ((kcf_tracker.x1 + kcf_tracker.x2) // 2, (kcf_tracker.y1 + kcf_tracker.y2) // 2)
-                            # pause_flag = True
+                        elif color_tracker.consecutive_lost >= color_tracker.LOST_CONDITION:
+                            util.draw_str(frame, (520, 20), 'No color')
+                            # kcf_tracker.enable = False
+                            # if current_zoom != 1:
+                            #     zoom_idx = 0
+                            #     current_zoom = zooms[zoom_idx]
+                            #     zoom.zoom_to(current_zoom)
+                            #     zoom_is_moving_flag = True
+                            #     zoom_timer = Timer(3, zoom_has_finished_moving, args = [False])
+                            #     zoom_timer.start()
 
                     elif cmt_tracker and cmt_tracker.has_result and cmt_tracker.best_effort is False:
                         # diff_width = abs(cmt_tracker.box_center[0] - kcf_tracker.center[0])
@@ -622,25 +597,71 @@ while fps._numFrames < args["num_frames"]:
                             cmt_tracker.y2 = kcf_tracker.y2
                             cmt_tracker.force_init_flag = True
 
+                    if kcf_tracker.enable:
+                        # calulate averages for height, width, center
+                        kcf_tracker.prev_widths = np.append(kcf_tracker.prev_widths, boundingbox[2])
+                        kcf_tracker.prev_heights = np.append(kcf_tracker.prev_heights, boundingbox[3])
+
+                        if kcf_tracker.prev_widths.shape[0] > 10: #kcf_tracker.PREV_HISTORY_SIZE: # 100
+                            kcf_tracker.prev_widths = np.delete(kcf_tracker.prev_widths, (0), axis=0)
+                            kcf_tracker.prev_heights = np.delete(kcf_tracker.prev_heights, (0), axis=0)
+
+                        kcf_tracker.mean_width = np.round(np.mean(kcf_tracker.prev_widths)).astype(np.int)
+                        kcf_tracker.mean_height = np.round(np.mean(kcf_tracker.prev_heights)).astype(np.int)
+                        kcf_tracker.mean_area = int(kcf_tracker.mean_width * kcf_tracker.mean_height)
+
+                        str = "{}x{}({}x{})".format(kcf_tracker.mean_width, kcf_tracker.mean_height, initial_width, initial_height)
+                        util.draw_str(frame, (20, 20), str)
+
+
+                    if args['autozoom'] and zoom_is_moving_flag is not True:
+                        zoom_in_idx = zoom_idx + 1 if zoom_idx < 4 else 4
+                        zoom_out_idx = zoom_idx - 1 if zoom_idx > 0 else 0
+                        normalized_length = list(map(lambda idx: zoom.FOVS[0][0]/zoom.FOVS[idx-1][0], [1,2,4,8,16]))
+                        # print("[ZOOM] Ratio in length", list(map(lambda i: round(i, 2), normalized_length)))
+                        zoom_in_length = kcf_tracker.mean_width * (normalized_length[zoom_in_idx]/normalized_length[zoom_idx])
+                        zoom_out_length = kcf_tracker.mean_width * (normalized_length[zoom_out_idx]/normalized_length[zoom_idx])
+                        max_length = WIDTH * 0.4
+                        selected_length = kcf_tracker.mean_width
+                        # print("[ZOOM] Current: {:02.0f}, Zoom in: {:02.0f}, Zoom out: {:02.0f}".format(selected_length, zoom_in_length, zoom_out_length))
+
+                        if selected_length >= max_length + 20:
+                            next_zoom_idx = zoom_out_idx
+                        elif selected_length > 0 and zoom_in_length < max_length: # 줌인할 길이가 상한을 넘지 않은 경우에는 줌인
+                            next_zoom_idx = zoom_in_idx
+                        else:
+                            next_zoom_idx = zoom_idx
+
+                        if zoom_idx != next_zoom_idx:
+                            next_zoom = zooms[next_zoom_idx]
+                            print("[ZOOM] {} to {}".format(current_zoom, next_zoom))
+                            zoom_idx = next_zoom_idx
+                            current_zoom = zooms[zoom_idx]
+                            zoom.zoom_to(current_zoom)
+                            zoom_is_moving_flag = True
+                            zoom_timer = Timer(3, zoom_has_finished_moving, args = [False])
+                            zoom_timer.start()
+
 
                 if motor_is_moving_flag is not True: # and zoom_is_moving_flag is not True:
                     motor_driving_flag = False
 
-                    if kcf_tracker and kcf_peak_value > 0.2:
-                        cX, cY = kcf_tracker.center
-                        motor_driving_flag = True
-
-                    elif color_tracker and color_tracker.consecutive_lost < color_tracker.FOUND_CONDITION:
-                        cX, cY = color_tracker.center
-                        motor_driving_flag = True
-
-                    elif cmt_tracker and cmt_tracker.has_result:
-                        cX, cY = cmt_tracker.box_center
-                        motor_driving_flag = True
-
-                    else:
-                        cX = HALF_WIDTH
-                        cY = HALF_HEIGHT
+                    if kcf_tracker:
+                        if kcf_peak_value > 0.2:
+                            cX, cY = kcf_tracker.center
+                            motor_driving_flag = True
+                        else:
+                            print("[KCF] Disabled:", kcf_peak_value)
+                            kcf_tracker.enable = False
+                    # elif color_tracker and color_tracker.consecutive_lost < color_tracker.FOUND_CONDITION:
+                    #     cX, cY = color_tracker.center
+                    #     motor_driving_flag = True
+                    # elif cmt_tracker and cmt_tracker.has_result:
+                    #     cX, cY = cmt_tracker.box_center
+                    #     motor_driving_flag = True
+                    # else:
+                    #     cX = HALF_WIDTH
+                    #     cY = HALF_HEIGHT
 
                     if args['serial'] and motor_driving_flag is True:
                         # cv2.drawMarker(frame, (cX, cY), (0,0,255))
@@ -660,6 +681,7 @@ while fps._numFrames < args["num_frames"]:
             cv2.line(frame, (HALF_WIDTH, 0), (HALF_WIDTH, WIDTH), (200, 200, 200), 0)
             cv2.line(frame, (0, HALF_HEIGHT), (WIDTH, HALF_HEIGHT), (200, 200, 200), 0)
 
+
         if args["display"] is True:
             if tracking_window['dragging'] == True:
                 pt1 = (tracking_window['x1'], tracking_window['y1'])
@@ -677,7 +699,7 @@ while fps._numFrames < args["num_frames"]:
             if pause_flag is False:
                 cv2.imshow("Tracking", frame)
 
-        key = cv2.waitKey(10)
+        key = cv2.waitKey(1)
         if key == 27 or key == ord('q'):
             break
         elif key == ord(' '):

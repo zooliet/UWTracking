@@ -6,7 +6,7 @@ from utils import util
 class ColorTracker():
 
     CENTER_DISPLACEMENT = 50
-    LOST_CONDITION = 100 # 30ms * 100 = 3 sec
+    LOST_CONDITION = 150 # 30ms * 100 = 3 sec
     FOUND_CONDITION = 1
 
     def __init__(self):
@@ -70,7 +70,7 @@ class ColorTracker():
 
         mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
         cv2.rectangle(mask, (x1, y1), (x2, y2), 255, -1)
-        (x1, y1), (x2, y2) = util.selection_enlarged(mask, x1, y1, x2, y2, ratio=1.5)
+        (x1, y1), (x2, y2) = util.selection_enlarged(mask, x1, y1, x2, y2, ratio=1.0)
         cv2.rectangle(mask, (x1, y1), (x2, y2), 255, -1)
         hsv = cv2.bitwise_and(hsv, hsv, mask=mask)
 
@@ -84,48 +84,41 @@ class ColorTracker():
         num_of_contours = len(contours)
         if num_of_contours > 0:
             sorted_contours = sorted(contours, key=cv2.contourArea, reverse=True)
-            contour0 = sorted_contours[0]
+            contour_largest = sorted_contours[0]
 
-            (x0, y0, w0, h0) = cv2.boundingRect(contour0)
+            (x0, y0, w0, h0) = cv2.boundingRect(contour_largest)
             center0 = np.int32([x0 + w0//2, y0 + h0//2])
             dist0 = util.distance(center0, self.center)
-            area0 = int(w0 * h0)
 
             if num_of_contours > 1:
-                contour1 = sorted_contours[1]
-                (x1, y1, w1, h1) = cv2.boundingRect(contour1)
+                contour_second_largest = sorted_contours[1]
+                (x1, y1, w1, h1) = cv2.boundingRect(contour_second_largest)
                 center1 = np.int32([x1 + w1//2, y1 + h1//2])
                 dist1 = util.distance(center1, self.center)
-                area1 = int(w1 * h1)
             else:
                 dist1 = dist0
                 center1 = center0
-                area1 = area0
                 (x1, y1, w1, h1) = (x0, y0, w0, h0)
 
             # print("[COLOR] prev center({}) to largest({}) and to the next largest({})".format(self.cener, dist0, dist1))
-            if dist0 <= dist1 and dist0 < self.CENTER_DISPLACEMENT:
+            if dist0 <= dist1: # and dist0 < self.CENTER_DISPLACEMENT:
                 self.center = center0
                 cv2.rectangle(frame, (x0,y0), (x0+w0, y0+h0), (255,0,0), 2)
-                self.area = area0
                 self.consecutive_lost = 0
-            elif dist0 > dist1 and dist1 < self.CENTER_DISPLACEMENT:
+            else: # elif dist0 > dist1: # and dist1 < self.CENTER_DISPLACEMENT:
                 self.center = center1
                 cv2.rectangle(frame, (x1,y1), (x1+w1, y1+h1), (255,0,0), 2)
-                self.area = area1
                 self.consecutive_lost = 0
-            elif self.consecutive_lost > self.LOST_CONDITION: # 100
-                if dist0 <= dist1:
-                    self.center = center0
-                    self.area = area0
-                    cv2.rectangle(frame, (x0,y0), (x0+w0, y0+h0), (255,0,0), 2)
-                else:
-                    self.center = center1
-                    self.area = area1
-                    cv2.rectangle(frame, (x1,y1), (x1+w1, y1+h1), (255,0,0), 2)
-                self.consecutive_lost = 0
-            else: # dist0 or dist1 > self.CENTER_DISPLACEMEN
-                self.consecutive_lost += 1
+            # elif self.consecutive_lost > self.LOST_CONDITION: # 100
+            #     if dist0 <= dist1:
+            #         self.center = center0
+            #         cv2.rectangle(frame, (x0,y0), (x0+w0, y0+h0), (255,0,0), 2)
+            #     else:
+            #         self.center = center1
+            #         cv2.rectangle(frame, (x1,y1), (x1+w1, y1+h1), (255,0,0), 2)
+            #     self.consecutive_lost = 0
+            # else: # dist0 or dist1 > self.CENTER_DISPLACEMEN
+            #     self.consecutive_lost += 1
 
         else:
             self.consecutive_lost += 1

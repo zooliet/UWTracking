@@ -186,14 +186,15 @@ class Motor:
     def track(self, center_to_x, center_to_y, current_zoom):
         # k와 SPEEDS와 MAX_MOVING_TIME 관계: k=32, SPEEDS=60000, MAX_MOVING_TIME=0.1
 
-        k = 128
-        do_not_move_conditions = [0, k, k, 0, k, 0, 0, 0, k, 0, 0, 0, 0, 0, 0, 0, k, 0, 0, 0, 0]
+        k = 64
+        do_not_move_conditions = [0, 24, 32, 0, 32, 0, 0, 0, k, 0, 0, 0, 0, 0, 0, 0, k, 0, 0, 0, 0]
+        do_not_move_conditions1 = [0, 32, 32, 0, 32, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 32, 0, 0, 0, 0]
 
-        # if abs(center_to_x) <= do_not_move_conditions[current_zoom]:
-        #     center_to_x = 0
-        #
-        # if abs(center_to_y) <= do_not_move_conditions[current_zoom]:
-        #     center_to_y = 0
+        if abs(center_to_x) <= do_not_move_conditions1[current_zoom]:
+            center_to_x = 0
+
+        if abs(center_to_y) <= do_not_move_conditions1[current_zoom]:
+            center_to_y = 0
 
         if center_to_x == 0 and center_to_y == 0:
             t_sec = 0
@@ -205,7 +206,7 @@ class Motor:
             SPEEDS = list(map(lambda idx: int(60000 * self.FOVS[idx-1][0]/self.FOVS[0][0]), list(range(0,21))))
             # print(SPEEDS)
             SPEED = SPEEDS[current_zoom]
-            MAX_MOVING_TIME = 0.1 # 0.1 for 100 ms
+            MAX_MOVING_TIME = 0.05 # 0.1 for 100 ms
             d = max(abs(x_to), abs(y_to))
             t_sec = d / SPEED
 

@@ -323,6 +323,8 @@ class KCFTracker:
         self.prev_widths = np.array([self.mean_width], dtype=np.int16)
         self.prev_heights = np.array([self.mean_height], dtype=np.int16)
 
+        self.enable = True
+
         # self.locations = np.empty((0,2))
         # self.dir_x_count = 0
         # self.dir_y_count = 0
