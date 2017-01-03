@@ -94,7 +94,6 @@ zooms = [1,2,4,8,16]
 zoom_idx = 0
 current_zoom = zooms[zoom_idx]
 show_lap_time_flag = False
-zoom_check_flag = False
 
 def motor_has_finished_moving(args):
     global motor_is_moving_flag
@@ -153,13 +152,11 @@ else:
 
 if args['color'] is True:
     color_tracker = ColorTracker()
-    zoom_control_interval = 100
 else:
     color_tracker = None
 
 if args['kcf'] is True:
     kcf_tracker = KCFTracker(True, False, True) # hog, fixed_window, multiscale
-    zoom_control_interval = 100
 else:
     kcf_tracker = None
 
@@ -171,7 +168,6 @@ else:
     cmt_tracker = None
 
 if cmt_tracker:
-    zoom_control_interval = 25
     gray0 = cv2.GaussianBlur(prev_gray, (3, 3), 0)
 
     for x in range(10, 500, 10):
@@ -210,6 +206,9 @@ while fps._numFrames < args["num_frames"]:
                     # height = tracking_window['y2'] - tracking_window['y1']
                     # area = width * height
                     # print("[Debug] Area:{}, Width: {}, Height: {} @ x{}".format(area, width, height, current_zoom))
+                    initial_width = tracking_window['x2'] - tracking_window['x1']
+                    initial_height = tracking_window['y2'] - tracking_window['y1']
+
 
                     if color_tracker:
                         if color_tracker.init(frame, options = tracking_window):
@@ -436,13 +435,44 @@ while fps._numFrames < args["num_frames"]:
                         kcf_tracker.prev_widths = np.append(kcf_tracker.prev_widths, boundingbox[2])
                         kcf_tracker.prev_heights = np.append(kcf_tracker.prev_heights, boundingbox[3])
 
-                        if kcf_tracker.prev_widths.shape[0] > kcf_tracker.PREV_HISTORY_SIZE: # 100
+                        if kcf_tracker.prev_widths.shape[0] > 10: #kcf_tracker.PREV_HISTORY_SIZE: # 100
                             kcf_tracker.prev_widths = np.delete(kcf_tracker.prev_widths, (0), axis=0)
                             kcf_tracker.prev_heights = np.delete(kcf_tracker.prev_heights, (0), axis=0)
 
                         kcf_tracker.mean_width = np.round(np.mean(kcf_tracker.prev_widths)).astype(np.int)
                         kcf_tracker.mean_height = np.round(np.mean(kcf_tracker.prev_heights)).astype(np.int)
                         kcf_tracker.mean_area = int(kcf_tracker.mean_width * kcf_tracker.mean_height)
+
+                        str = "{}x{}({}x{})".format(kcf_tracker.mean_width, kcf_tracker.mean_height, initial_width, initial_height)
+                        util.draw_str(frame, (20, 20), str)
+
+                        if args['autozoom'] and zoom_is_moving_flag is not True:
+                            zoom_in_idx = zoom_idx + 1 if zoom_idx < 4 else 4
+                            zoom_out_idx = zoom_idx - 1 if zoom_idx > 0 else 0
+                            normalized_length = list(map(lambda idx: zoom.FOVS[0][0]/zoom.FOVS[idx-1][0], [1,2,4,8,16]))
+                            # print("[ZOOM] Ratio in length", list(map(lambda i: round(i, 2), normalized_length)))
+                            zoom_in_length = kcf_tracker.mean_width * (normalized_length[zoom_in_idx]/normalized_length[zoom_idx])
+                            zoom_out_length = kcf_tracker.mean_width * (normalized_length[zoom_out_idx]/normalized_length[zoom_idx])
+                            max_length = WIDTH * 0.25
+                            selected_length = kcf_tracker.mean_width
+                            # print("[ZOOM] Current: {:02.0f}, Zoom in: {:02.0f}, Zoom out: {:02.0f}".format(selected_length, zoom_in_length, zoom_out_length))
+
+                            if selected_length >= max_length + 20:
+                                next_zoom_idx = zoom_out_idx
+                            elif selected_length > 0 and zoom_in_length < max_length: # 줌인할 길이가 상한을 넘지 않은 경우에는 줌인
+                                next_zoom_idx = zoom_in_idx
+                            else:
+                                next_zoom_idx = zoom_idx
+
+                            if zoom_idx != next_zoom_idx:
+                                next_zoom = zooms[next_zoom_idx]
+                                print("[ZOOM] {} to {}".format(current_zoom, next_zoom))
+                                zoom_idx = next_zoom_idx
+                                current_zoom = zooms[zoom_idx]
+                                zoom.zoom_to(current_zoom)
+                                zoom_is_moving_flag = True
+                                zoom_timer = Timer(3, zoom_has_finished_moving, args = [False])
+                                zoom_timer.start()
 
                     # print("[KCF/CMT] lost({}) vs found({})".format(kcf_tracker.consecutive_cmt_lost, kcf_tracker.consecutive_cmt_found))
                     if color_tracker and color_tracker.consecutive_lost < color_tracker.FOUND_CONDITION:
@@ -462,7 +492,7 @@ while fps._numFrames < args["num_frames"]:
                         diff_width = abs(color_tracker.center[0] - kcf_tracker.center[0])
                         diff_height = abs(color_tracker.center[1] - kcf_tracker.center[1])
                         if diff_width > boundingbox[2] // 6 or diff_height < boundingbox[3] // 6: # boundingbox[2] == width
-                            # print("[KCF] Bounding({},{}) vs Mean({},{})".format(boundingbox[2], boundingbox[3], kcf_tracker.mean_width, kcf_tracker.mean_height))
+                            print("[KCF] Bounding({},{}) vs Mean({},{})".format(boundingbox[2], boundingbox[3], kcf_tracker.mean_width, kcf_tracker.mean_height))
                             kcf_tracker.x1 = color_tracker.center[0] - kcf_tracker.mean_width // 2
                             kcf_tracker.x2 = color_tracker.center[0] + kcf_tracker.mean_width // 2
                             kcf_tracker.y1 = int(color_tracker.center[1] - kcf_tracker.mean_height/ 4)
@@ -592,96 +622,27 @@ while fps._numFrames < args["num_frames"]:
                             cmt_tracker.y2 = kcf_tracker.y2
                             cmt_tracker.force_init_flag = True
 
-                if fps._numFrames % zoom_control_interval == 0 and zoom and args['autozoom']: # several seconds
-                    # print('[ZOOM] processing @{}'.format(datetime.datetime.now().time().isoformat()))
-                    zoom_check_flag = True
 
-                if motor_is_moving_flag is not True and zoom_is_moving_flag is not True:
+                if motor_is_moving_flag is not True: # and zoom_is_moving_flag is not True:
                     motor_driving_flag = False
-                    zoom_driving_flag = False
 
                     if kcf_tracker and kcf_peak_value > 0.2:
                         cX, cY = kcf_tracker.center
-                        zWidth = kcf_tracker.mean_width
-                        zHeight = kcf_tracker.mean_height
                         motor_driving_flag = True
 
                     elif color_tracker and color_tracker.consecutive_lost < color_tracker.FOUND_CONDITION:
                         cX, cY = color_tracker.center
-                        zWidth = 0
-                        zHeight = 0
                         motor_driving_flag = True
 
                     elif cmt_tracker and cmt_tracker.has_result:
                         cX, cY = cmt_tracker.box_center
-                        zWidth = cmt_tracker.mean_width
-                        zHeight = cmt_tracker.mean_height
                         motor_driving_flag = True
 
                     else:
                         cX = HALF_WIDTH
                         cY = HALF_HEIGHT
-                        zWidth = 0
-                        zHeight = 0
 
-                    if zoom_check_flag is True:
-                        zoom_check_flag = False
-
-                        # zoom_idx: 0 ~ 6
-                        # current_zoom = zooms[zoom_idx]: 1,2,4,8,12,16,20
-                        normalized_length = list(map(lambda idx: zoom.FOVS[0][0]/zoom.FOVS[idx-1][0], [1,2,4,8,12,16,20]))
-                        # print("[ZOOM] Ratio in length", list(map(lambda i: round(i, 2), normalized_length)))
-
-                        zoom_in_idx = zoom_idx + 1 if zoom_idx < 6 else 6
-                        zoom_out_idx = zoom_idx - 1 if zoom_idx > 0 else 0
-
-                        if zWidth / WIDTH >= zHeight / HEIGHT:
-                            zoom_in_length = zWidth * (normalized_length[zoom_in_idx]/normalized_length[zoom_idx])
-                            zoom_out_length = zWidth * (normalized_length[zoom_out_idx]/normalized_length[zoom_idx])
-                            max_length = WIDTH * 0.25
-                            selected_length = zWidth
-                        else:
-                            zoom_in_length = zHeight * (normalized_length[zoom_in_idx]/normalized_length[zoom_idx])
-                            zoom_out_length = zHeight * (normalized_length[zoom_out_idx]/normalized_length[zoom_idx])
-                            max_length = HEIGHT * 0.25
-                            selected_length = zHeight
-
-                        # max_length = 160
-
-                        print("[ZOOM] Current: {:02.0f}, Zoom in: {:02.0f}, Zoom out: {:02.0f}".format(selected_length, zoom_in_length, zoom_out_length))
-
-                        if selected_length >= max_length:
-                            next_zoom_idx = zoom_out_idx
-                        elif selected_length > 0 and zoom_in_length < max_length: # 줌인할 길이가 상한을 넘지 않은 경우에는 줌인
-                            next_zoom_idx = zoom_in_idx
-                        else:
-                            next_zoom_idx = zoom_idx
-
-
-                        # if selected_length >= max_length:
-                        #     next_zoom_idx = zoom_out_idx
-                        # elif zoom_in_length < max_length:
-                        #     next_zoom_idx = zoom_in_idx
-                        # else:
-                        #     next_zoom_idx = zoom_idx
-
-                        if zoom_idx != next_zoom_idx:
-                            zoom_driving_flag = True
-                        else:
-                            zoom_driving_flag = False
-
-                        if zoom_driving_flag is True:
-                            # next_zoom_idx, normalized_length, zoom_driving_flag의 scope 주의
-                            next_zoom = zooms[next_zoom_idx]
-                            print("[ZOOM] {} to {}".format(current_zoom, next_zoom))
-                            zoom_idx = next_zoom_idx
-                            current_zoom = zooms[zoom_idx]
-                            zoom.zoom_to(current_zoom)
-                            zoom_is_moving_flag = True
-                            zoom_timer = Timer(1, zoom_has_finished_moving, args = [False])
-                            zoom_timer.start()
-
-                    if args['serial'] and motor_driving_flag is True and zoom_driving_flag is False:
+                    if args['serial'] and motor_driving_flag is True:
                         # cv2.drawMarker(frame, (cX, cY), (0,0,255))
                         center_to_x = HALF_WIDTH - cX
                         center_to_y = cY - HALF_HEIGHT
@@ -695,7 +656,6 @@ while fps._numFrames < args["num_frames"]:
                             motor_is_moving_flag = True
                             motor_timer = Timer(t_sec, motor_has_finished_moving, args = [False])
                             motor_timer.start()
-
 
             cv2.line(frame, (HALF_WIDTH, 0), (HALF_WIDTH, WIDTH), (200, 200, 200), 0)
             cv2.line(frame, (0, HALF_HEIGHT), (WIDTH, HALF_HEIGHT), (200, 200, 200), 0)
@@ -717,7 +677,7 @@ while fps._numFrames < args["num_frames"]:
             if pause_flag is False:
                 cv2.imshow("Tracking", frame)
 
-        key = cv2.waitKey(1)
+        key = cv2.waitKey(10)
         if key == 27 or key == ord('q'):
             break
         elif key == ord(' '):
@@ -735,7 +695,7 @@ while fps._numFrames < args["num_frames"]:
                 current_zoom = zooms[zoom_idx]
                 zoom.zoom_to(current_zoom)
                 zoom_is_moving_flag = True
-                zoom_timer = Timer(1, zoom_has_finished_moving, args = [False])
+                zoom_timer = Timer(0.1, zoom_has_finished_moving, args = [False])
                 zoom_timer.start()
         elif key == 65364: # 'down', 63233 for Mac
             if zoom_is_moving_flag is not True and current_zoom > 1:
@@ -743,7 +703,7 @@ while fps._numFrames < args["num_frames"]:
                 current_zoom = zooms[zoom_idx]
                 zoom.zoom_to(current_zoom)
                 zoom_is_moving_flag = True
-                zoom_timer = Timer(1, zoom_has_finished_moving, args = [False])
+                zoom_timer = Timer(0.1, zoom_has_finished_moving, args = [False])
                 zoom_timer.start()
         elif key == 65361: # 'left', 63234 for Mac
             if zoom_is_moving_flag is not True:
@@ -759,7 +719,7 @@ while fps._numFrames < args["num_frames"]:
                 # print("[ZOOM] to 16")
                 zoom_idx = 4
                 current_zoom = zooms[zoom_idx]
-                zoom.zoom_x20()
+                zoom.zoom_to(current_zoom)
                 zoom_is_moving_flag = True
                 zoom_timer = Timer(2.5, zoom_has_finished_moving, args = [False])
                 zoom_timer.start()
@@ -786,11 +746,9 @@ while fps._numFrames < args["num_frames"]:
             cmt_tracker.descriptor = detector
         elif key == ord('l'):
             show_lap_time_flag = not show_lap_time_flag
-
         elif key == ord('z'):
             if args['serial']:
                 motor.sum_of_x_degree = motor.sum_of_y_degree = 0
-
 
         # pause가 아니면 prev_hash를 갱신함 (당연),
         # 반대로 pause일때는 갱신하지 않음으로 prev_hash와 frame_hash를 불일치 시킴. Why? pause에도 key 입력 루틴을 실행하기 위한 의도적인 조치임

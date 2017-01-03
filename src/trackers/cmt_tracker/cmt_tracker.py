@@ -14,7 +14,7 @@ class CMTTracker:
     THR_CONF = 0.75
     THR_RATIO = 0.8
     DESC_LENGTH = 512
-    MIN_NUM_OF_KEYPOINTS_FOR_BRISK_THRESHOLD = 100 # 900
+    MIN_NUM_OF_KEYPOINTS_FOR_BRISK_THRESHOLD = 300 # 900
     PREV_HISTORY_SIZE = 100
 
     def __init__(self, scale, rotation, cmt_detector_threshold = 70, best_effort = False):

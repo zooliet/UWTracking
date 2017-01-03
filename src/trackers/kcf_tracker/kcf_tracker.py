@@ -323,9 +323,9 @@ class KCFTracker:
         self.prev_widths = np.array([self.mean_width], dtype=np.int16)
         self.prev_heights = np.array([self.mean_height], dtype=np.int16)
 
-        self.locations = np.empty((0,2))
-        self.dir_x_count = 0
-        self.dir_y_count = 0
+        # self.locations = np.empty((0,2))
+        # self.dir_x_count = 0
+        # self.dir_y_count = 0
 
     def update(self, image):
         if(self._roi[0]+self._roi[2] <= 0):  self._roi[0] = -self._roi[2] + 1
@@ -339,12 +339,12 @@ class KCFTracker:
         loc, peak_value = self.detect(self._tmpl, self.getFeatures(image, 0, 1.0))
 
         # if abs(loc[1]) < 0.1:
-        self.locations = np.append(self.locations, [loc], axis=0)
-
-        if len(self.locations) > self.PREV_HISTORY_SIZE:
-            self.locations = np.delete(self.locations, (0), axis=0)
-
-        self.location = np.sum(self.locations, axis=0)
+        # self.locations = np.append(self.locations, [loc], axis=0)
+        #
+        # if len(self.locations) > self.PREV_HISTORY_SIZE:
+        #     self.locations = np.delete(self.locations, (0), axis=0)
+        #
+        # self.location = np.sum(self.locations, axis=0)
         # print("[KCF] ({:+.4f}, {:+.4f}) =>({:+.4f}, {:+.4f}) peak {:.2f}".format(loc[0], loc[1], self.location[0], self.location[1], peak_value))
 
         if (self.scale_step != 1):

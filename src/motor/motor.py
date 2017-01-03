@@ -63,6 +63,7 @@ class Motor:
             (3.2632/2, 1.9167/2),
             (3.5000/2, 1.9320/2), ] #20
 
+    # FOVS 는 실제로는 Half FOVS를 표현
     FOVS = [(62.5000/2, 34.5000/2), #1
             (62.5000/4, 34.5000/4), #2
             (0, 0),
@@ -110,7 +111,7 @@ class Motor:
 
     def move(self, x = 255, y = 255, z = 0, f = 0,  t = 1, rel = 0xff):
         t = int(t * 1000000) # sec to us
-        print("[MOTOR] Move: x: {} y: {} t: {} rel: {}".format(x, y, t, rel))
+        # print("[MOTOR] Move: x: {} y: {} t: {} rel: {}".format(x, y, t, rel))
 
         if (self.sum_of_x_degree > 90 and x > 0) or (self.sum_of_x_degree < -90 and x < 0):
             x = 0
@@ -179,13 +180,13 @@ class Motor:
         y = int(y_degree/self.DEGREE_PER_PULSE)
         z = f = 0
 
-        print("[MOTOR] ({}px, {}px) => ({:.4f}°, {:.4f}°) => ({}, {}) pulse".format(x_px, y_px, x_degree, y_degree, x, y))
+        # print("[MOTOR] ({}px, {}px) => ({:.4f}°, {:.4f}°) => ({}, {}) pulse".format(x_px, y_px, x_degree, y_degree, x, y))
         return x, y, z, f
 
     def track(self, center_to_x, center_to_y, current_zoom):
         # k와 SPEEDS와 MAX_MOVING_TIME 관계: k=32, SPEEDS=60000, MAX_MOVING_TIME=0.1
 
-        k = 64
+        k = 128
         do_not_move_conditions = [0, k, k, 0, k, 0, 0, 0, k, 0, 0, 0, 0, 0, 0, 0, k, 0, 0, 0, 0]
 
         # if abs(center_to_x) <= do_not_move_conditions[current_zoom]:
@@ -289,7 +290,7 @@ class Motor:
         self.stop_zooming()
 
     def zoom_to(self, x):
-        print('[ZOOM] to', x)
+        # print('[ZOOM] to', x)
         if False: #x == 1:
             self.zoom_x1()
         elif False: #x == 20:
