@@ -1,6 +1,7 @@
 import struct
 import serial
 import time
+from threading import Timer
 
 class Motor:
     TABLE = [0,  94, 188, 226,  97,  63, 221, 131, 194, 156, 126,  32, 163, 253,  31,  65,
@@ -20,98 +21,72 @@ class Motor:
         233, 183,  85,  11, 136, 214,  52, 106,  43, 117, 151, 201,  74,  20, 246, 168,
         116,  42, 200, 150,  21,  75, 169, 247, 182, 232,  10,  84, 215, 137, 107,  53]
 
-    FOVS_CAM_1 = [(62.0000/2, 34.5000/2), #1
-            (28.5800/2, 16.5000/2), #2
-            (20.6666/2, 11.5000/2),
-            (14.4000/2, 8.0000/2), #4
-            (12.4000/2, 6.9000/2),
-            (10.3333/2, 5.7500/2),
-            (8.8571/2, 4.9286/2),
-            (7.5000/2, 4.1000/2), #8
-            (6.8888/2, 3.8333/2),
-            (6.2000/2, 3.4500/2),
-            (5.6364/2, 3.1364/2),
-            (5.1667/2, 2.8750/2), #12
-            (4.7692/2, 2.6538/2),
-            (4.4286/2, 2.4643/2),
-            (4.1333/2, 2.3000/2),
-            (3.8000/2, 2.1562/2), #16
-            (3.6471/2, 2.1000/2),
-            (3.4444/2, 2.0294/2),
-            (3.2632/2, 1.9167/2),
-            (3.2000/2, 1.8000/2), ] #20
-
-    # serial: 16092601
-    FOVS_16092601 = [(62.5000/2, 34.5000/2), #1
-            (28.0000/2, 15.4560/2), #2
-            (20.6666/2, 11.5000/2),
-            (14.8500/2, 8.1972/2), #4
-            (12.4000/2, 6.9000/2),
-            (10.3333/2, 5.7500/2),
-            (8.8571/2, 4.9286/2),
-            (7.8500/2, 4.3332/2), #8
-            (6.8888/2, 3.8333/2),
-            (6.2000/2, 3.4500/2),
-            (5.6364/2, 3.1364/2),
-            (5.2000/2, 2.8704/2), #12
-            (4.7692/2, 2.6538/2),
-            (4.4286/2, 2.4643/2),
-            (4.1333/2, 2.3000/2),
-            (3.9500/2, 2.1804/2), #16
-            (3.6471/2, 2.1000/2),
-            (3.4444/2, 2.0294/2),
-            (3.2632/2, 1.9167/2),
-            (3.5000/2, 1.9320/2), ] #20
-
-    # FOVS 는 실제로는 Half FOVS를 표현
-    FOVS = [(62.5000/2, 34.5000/2), #1
-            (62.5000/4, 34.5000/4), #2
-            (0, 0),
-            (62.5000/8, 34.5000/8), #4
-            (0, 0),
-            (0, 0),
-            (0, 0),
-            (62.5000/16, 34.5000/16), #8
-            (0, 0),
-            (0, 0),
-            (0, 0),
-            (62.5000/24, 34.5000/24), #12
-            (0, 0),
-            (0, 0),
-            (0, 0),
-            (62.5000/32, 34.5000/32), #16
-            (0, 0),
-            (0, 0),
-            (0, 0),
-            (62.5000/40, 34.5000/40), ] #20
-
-    WIDTH = 640  # 640x360, 1024x576, 1280x720, 1920x1080
-    HEIGHT = WIDTH * 9 // 16
-    HALF_WIDTH = WIDTH//2
-    HALF_HEIGHT = HEIGHT//2
-
-    DEGREE_PER_PULSE = 0.00048 # 0.00048은 현재 사용 모터와 기어비로 결정되는 펄스 당 회전 각도 (degree)
-
-    FLICTIONLESS_PULSE_PER_SEC = [0, 12000, 12000,0,12000,0,0,0,12000,0,0,0,12000,0,0,0,12000,0,0,0,12000] # pulse / sec # zoom and fov에 따라 가변적이어야 함: 2400 ~ 300
-    # MOVING_TIME = 0.01 #0.01 # 10 ms
-    # WEIGHTS = [1,2,3,2,1]
-    MOVING_TIME = 0.05 #0.01 # 10 ms
-    WEIGHTS = [1]
-    WEIGHTS_TOTAL = sum(WEIGHTS)
-    MOVING_STEP = len(WEIGHTS)
-
-
-    SPEEDS = [12000, 5376, 2851, 1507, 998, 758, 672]
-    # list(map(lambda idx: int(12000 * self.FOVS[idx-1][0]/self.FOVS[0][0]), [1,2,4,8,12,16,20]))
-
-    def __init__(self, dev = '/dev/ttyUSB0', baud = 115200):
+    def __init__(self, dev = '/dev/ttyUSB0', baud = 115200, screen_width = 640):
         self.port = serial.Serial(dev, baud, timeout = 0, parity = serial.PARITY_NONE)
         self.sum_of_x_degree = 0
         self.sum_of_y_degree = 0
 
+        self.is_moving = False
+        self.is_zooming = False
+        self.available_zooms = [1,2,4,8,16]
+        self.current_zoom = 1
+
+        self.WIDTH = screen_width # 640x360, 1024x576, 1280x720, 1920x1080
+        self.HEIGHT = int(self.WIDTH * 9 / 16)
+        self.HALF_WIDTH = self.WIDTH // 2
+        self.HALF_HEIGHT = self.HEIGHT // 2
+
+        self.DEGREE_PER_PULSE = 0.00048 # 0.00048은 현재 사용 모터와 기어비로 결정되는 펄스 당 회전 각도 (degree)
+
+        # FOVS 는 실제로는 Half FOVS를 표현
+        self.FOVS = [(62.5000/2, 34.5000/2), #1
+                    (62.5000/4, 34.5000/4), #2
+                    (0, 0),
+                    (62.5000/8, 34.5000/8), #4
+                    (0, 0),
+                    (0, 0),
+                    (0, 0),
+                    (62.5000/16, 34.5000/16), #8
+                    (0, 0),
+                    (0, 0),
+                    (0, 0),
+                    (62.5000/24, 34.5000/24), #12
+                    (0, 0),
+                    (0, 0),
+                    (0, 0),
+                    (62.5000/32, 34.5000/32), #16
+                    (0, 0),
+                    (0, 0),
+                    (0, 0),
+                    (62.5000/40, 34.5000/40), ] #20
+
+    def has_finished_moving(self, args):
+        self.is_moving = False
+        print("[MOTOR] End of Moving")
+
+    def send_packet(self, buffer):
+        crc8 = self.crc8_calc(buffer[2:-1])
+        buffer[len(buffer) - 1] = crc8
+
+        bstr = bytes(buffer)
+
+        self.port.write(bstr)
+
+    def crc8_calc(self, data = []):
+        crc8 = 0;
+
+        if len(data) == 0:
+            test_data = [213, 26, 142, 255, 0, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 64, 66, 15, 0, 0, 55]
+            data = test_data[2:-1]
+
+        for x in data:
+            crc8 = Motor.TABLE[crc8 ^ x]
+
+        return crc8
+
     def move(self, x = 255, y = 255, z = 0, f = 0,  t = 1, rel = 0xff):
         t = int(t * 1000000) # sec to us
-        # print("[MOTOR] Move: x: {} y: {} t: {} rel: {}".format(x, y, t, rel))
+        print("[MOTOR] Move: x: {} y: {} t: {} rel: {}".format(x, y, t, rel))
 
         if (self.sum_of_x_degree > 90 and x > 0) or (self.sum_of_x_degree < -90 and x < 0):
             x = 0
@@ -141,26 +116,6 @@ class Motor:
 
         self.send_packet(buffer)
 
-    def send_packet(self, buffer):
-        crc8 = self.crc8_calc(buffer[2:-1])
-        buffer[len(buffer) - 1] = crc8
-
-        bstr = bytes(buffer)
-
-        self.port.write(bstr)
-
-    def crc8_calc(self, data = []):
-        crc8 = 0;
-
-        if len(data) == 0:
-            test_data = [213, 26, 142, 255, 0, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 64, 66, 15, 0, 0, 55]
-            data = test_data[2:-1]
-
-        for x in data:
-            crc8 = Motor.TABLE[crc8 ^ x]
-
-        return crc8
-
     def pixel_to_pulse(self, x_px, y_px, zoom = 1, limit = False):
         # Logitec
         # x_degree = x_px/320 * 66.59215896/2
@@ -173,98 +128,66 @@ class Motor:
         x_degree = x_px/self.HALF_WIDTH * self.FOVS[zoom-1][0]
         y_degree = y_px/self.HALF_HEIGHT * self.FOVS[zoom-1][1]
 
-        # self.sum_of_x_degree += x_degree
-        # self.sum_of_y_degree += y_degree
-
         x = int(x_degree/self.DEGREE_PER_PULSE)
         y = int(y_degree/self.DEGREE_PER_PULSE)
         z = f = 0
 
-        # print("[MOTOR] ({}px, {}px) => ({:.4f}°, {:.4f}°) => ({}, {}) pulse".format(x_px, y_px, x_degree, y_degree, x, y))
+        print("[MOTOR] ({}px, {}px) => ({:.4f}°, {:.4f}°) => ({}, {}) pulse".format(x_px, y_px, x_degree, y_degree, x, y))
         return x, y, z, f
 
-    def track(self, center_to_x, center_to_y, current_zoom):
-        # k와 SPEEDS와 MAX_MOVING_TIME 관계: k=32, SPEEDS=60000, MAX_MOVING_TIME=0.1
+    def move_to(self, x, y, current_zoom=1):
+        motor_timer = Timer(1, self.has_finished_moving, args = [False])
+        (x_to, y_to, z_to, f_to) = self.pixel_to_pulse(x, y, current_zoom, limit = False)
+        self.move(x = x_to, y = y_to, z = z_to, f = f_to, t = 1)
+        motor_timer.start()
+        self.is_moving = True
 
-        k = 64
-        do_not_move_conditions = [0, 24, 32, 0, 32, 0, 0, 0, k, 0, 0, 0, 0, 0, 0, 0, k, 0, 0, 0, 0]
-        do_not_move_conditions1 = [0, 32, 32, 0, 32, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 32, 0, 0, 0, 0]
-
-        if abs(center_to_x) <= do_not_move_conditions1[current_zoom]:
-            center_to_x = 0
-
-        if abs(center_to_y) <= do_not_move_conditions1[current_zoom]:
-            center_to_y = 0
-
-        if center_to_x == 0 and center_to_y == 0:
-            t_sec = 0
-        else:
+    def track(self, center_to_x, center_to_y, current_zoom=1):
+        if abs(center_to_x) > 2 or abs(center_to_y) > 2:
             (x_to, y_to, z_to, f_to) = self.pixel_to_pulse(center_to_x, center_to_y, current_zoom, limit = True)
 
-            # 예전에 쓰던 알고리즘:
             # SPEED = 12000 # full speed: 120000, half speed: 600000
-            SPEEDS = list(map(lambda idx: int(60000 * self.FOVS[idx-1][0]/self.FOVS[0][0]), list(range(0,21))))
-            # print(SPEEDS)
+            # SPEEDS = list(map(lambda idx: int(120000 * self.FOVS[idx-1][0]/self.FOVS[0][0]), list(range(0,21))))
+            # SPEEDS = [3000, 60000, 30000, 0, 15000, 0, 0, 0, 7500, 0, 0, 0, 5000, 0, 0, 0, 3750, 0, 0, 0, 3000]
+            SPEEDS = [6000, 60000, 30000, 0, 30000, 0, 0, 0, 15000, 0, 0, 0, 10000, 0, 0, 0, 7500, 0, 0, 0, 6000]
+            print(SPEEDS)
             SPEED = SPEEDS[current_zoom]
             MAX_MOVING_TIME = 0.05 # 0.1 for 100 ms
             d = max(abs(x_to), abs(y_to))
             t_sec = d / SPEED
 
-            if t_sec > MAX_MOVING_TIME:
+            do_not_move_conditions = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+            if t_sec > MAX_MOVING_TIME * 3:
                 x_to = int(x_to * (MAX_MOVING_TIME / t_sec))
                 y_to = int(y_to * (MAX_MOVING_TIME / t_sec))
                 t_sec = MAX_MOVING_TIME
             else:
                 if x_to > do_not_move_conditions[current_zoom] or x_to < -do_not_move_conditions[current_zoom]:
                     x_to = int(x_to / 10)
-                # if x_to > do_not_move_conditions[current_zoom]:
-                #     x_to -= do_not_move_conditions[current_zoom]
-                # elif x_to < -do_not_move_conditions[current_zoom]:
-                #     x_to += do_not_move_conditions[current_zoom]
                 else:
                     x_to = 0
-                #
+
                 if y_to > do_not_move_conditions[current_zoom] or y_to < -do_not_move_conditions[current_zoom]:
                     y_to = int(y_to / 10)
-                # if y_to > do_not_move_conditions[current_zoom]:
-                #     y_to -= do_not_move_conditions[current_zoom]
-                # elif y_to < -do_not_move_conditions[current_zoom]:
-                #     y_to += do_not_move_conditions[current_zoom]
                 else:
                     y_to = 0
 
-                if y_to == 0 and x_to == 0:
-                    t_sec = 0
-
-
-
-                # t_sec = MAX_MOVING_TIME
-                # x_to = 0
-                # y_to = 0
-                # t_sec = 0
+            if y_to == 0 and x_to == 0:
+                t_sec = 0
 
             self.move(x = x_to, y = y_to, z = z_to, f = f_to, t = t_sec)
 
-            # pulse_per_moving_time = self.FLICTIONLESS_PULSE_PER_SEC[current_zoom] * self.MOVING_TIME
-            # pulse_limit = int(pulse_per_moving_time * self.WEIGHTS_TOTAL)
-            #
-            # if abs(x_to) > pulse_limit:
-            #     x_to = pulse_limit if x_to >= 0 else -pulse_limit
-            #
-            # if abs(y_to) > pulse_limit:
-            #     y_to = pulse_limit if y_to >= 0 else -pulse_limit
-            #
-            # x_pulses = list(map(lambda weight: int(x_to*weight/self.WEIGHTS_TOTAL), self.WEIGHTS))
-            # y_pulses = list(map(lambda weight: int(y_to*weight/self.WEIGHTS_TOTAL), self.WEIGHTS))
-            #
-            # print("[MOTOR] Pixel: ({},{}) => Pulse: ({},{}) => [{},{}]".format(center_to_x, center_to_y, x_to, y_to, x_pulses, y_pulses))
-            #
-            # for (x_pulse, y_pulse) in zip(x_pulses, y_pulses):
-            #     self.move(x = x_pulse, y = y_pulse, z = 0, f = 0, t = self.MOVING_TIME)
-            #
-            # t_sec = self.MOVING_TIME * self.MOVING_STEP
+            if t_sec > 0:
+                self.is_moving = True
+                motor_timer = Timer(t_sec, self.has_finished_moving, args = [False])
+                motor_timer.start()
 
-        return t_sec
+    def has_finished_zooming(self, zoom):
+        # zoom.stop_zooming()
+        self.is_zooming = False
+        self.current_zoom = zoom
+        print("[ZOOM] End of Zooming")
 
     def zoom_x1(self):
         # print('[ZOOM] to x1')
@@ -278,37 +201,24 @@ class Motor:
         bstr = bytes(buffer)
         self.port.write(bstr)
 
-    def zoom(self, direction):
-        if direction == 'in':
-            buffer = [0xff,0x01,0x00,0x20,0x00,0x00,0x21]
-            bstr = bytes(buffer)
-            self.port.write(bstr)
-        else:
-            buffer = [0xff,0x01,0x00,0x40,0x00,0x00,0x41]
-            bstr = bytes(buffer)
-            self.port.write(bstr)
-        time.sleep(0.1)
-        self.stop_zooming()
-
-    def zoom_to(self, x):
+    def zoom_to(self, x, dur=0.1):
         # print('[ZOOM] to', x)
-        if False: #x == 1:
-            self.zoom_x1()
-        elif False: #x == 20:
-            self.zoom_x20()
-        else:
-            zoom_to_preset = {1: 1, 2: 2, 4: 3, 8: 4, 16: 5} # zoom to preset
-            preset = zoom_to_preset[x]
+        zoom_to_preset = {1: 1, 2: 2, 4: 3, 8: 4, 16: 5} # zoom to preset
+        preset = zoom_to_preset[x]
 
-            buffer = [0xff,0x01,0x00,0x07,0x00,preset,0x00]
-            checksum = 0
-            for el in buffer[1: -1]:
-                checksum += el
+        buffer = [0xff,0x01,0x00,0x07,0x00,preset,0x00]
+        checksum = 0
+        for el in buffer[1: -1]:
+            checksum += el
 
-            checksum = checksum % 256
-            buffer[-1] = checksum
-            bstr = bytes(buffer)
-            self.port.write(bstr)
+        checksum = checksum % 256
+        buffer[-1] = checksum
+        bstr = bytes(buffer)
+        self.port.write(bstr)
+
+        self.is_zooming = True
+        zoom_timer = Timer(dur, self.has_finished_zooming, args = [x])
+        zoom_timer.start()
 
     def stop_zooming(self):
         buffer = [0xff,0x01,0x00,0x00,0x00,0x00,0x01]
@@ -337,3 +247,100 @@ class Motor:
         buffer[-1] = checksum
         bstr = bytes(buffer)
         self.port.write(bstr)
+
+    def zoom(self, direction):
+        if direction == 'in':
+            buffer = [0xff,0x01,0x00,0x20,0x00,0x00,0x21]
+            bstr = bytes(buffer)
+            self.port.write(bstr)
+        else:
+            buffer = [0xff,0x01,0x00,0x40,0x00,0x00,0x41]
+            bstr = bytes(buffer)
+            self.port.write(bstr)
+        time.sleep(0.1)
+        self.stop_zooming()
+
+    def find_next_zoom(self, dir):
+        idx = self.available_zooms.index(self.current_zoom)
+        next_zoom = self.current_zoom
+
+        if dir == 'in':
+            if idx < len(self.available_zooms) - 1:
+                idx += 1
+                next_zoom = self.available_zooms[idx]
+        elif dir == 'out':
+            if idx > 0:
+                idx -= 1
+                next_zoom = self.available_zooms[idx]
+        elif dir == 'first':
+            next_zoom = self.available_zooms[0]
+        elif dir == 'last':
+            next_zoom = self.available_zooms[len(self.available_zooms) - 1]
+
+        return next_zoom
+
+    def find_next_auto_zoom(self, target_length):
+        idx = self.available_zooms.index(self.current_zoom)
+        zoom_in_idx = idx + 1 if idx < len(self.available_zooms) - 1 else len(self.available_zooms) - 1
+        zoom_out_idx = idx - 1 if idx > 0 else 0
+
+        normalized_length = list(map(lambda idx: self.FOVS[0][0]/self.FOVS[idx-1][0], self.available_zooms))
+        # print("[ZOOM] Ratio in length", list(map(lambda i: round(i, 2), normalized_length)))
+
+        zoom_in_length = target_length * (normalized_length[zoom_in_idx]/normalized_length[idx])
+        zoom_out_length = target_length * (normalized_length[zoom_out_idx]/normalized_length[idx])
+        max_length = self.WIDTH * 0.4
+        # print("[ZOOM] Current: {:02.0f}, Zoom in: {:02.0f}, Zoom out: {:02.0f}".format(target_length, zoom_in_length, zoom_out_length))
+
+        if target_length >= max_length + 20:
+            next_zoom = self.available_zooms[zoom_out_idx]
+        elif target_length > 0 and zoom_in_length < max_length: # 줌인할 길이가 상한을 넘지 않은 경우에는 줌인
+            next_zoom = self.available_zooms[zoom_in_idx]
+        else:
+            next_zoom = self.current_zoom
+
+        return next_zoom
+
+
+# FOVS_CAM_1 = [(62.0000/2, 34.5000/2), #1
+#             (28.5800/2, 16.5000/2), #2
+#             (20.6666/2, 11.5000/2),
+#             (14.4000/2, 8.0000/2), #4
+#             (12.4000/2, 6.9000/2),
+#             (10.3333/2, 5.7500/2),
+#             (8.8571/2, 4.9286/2),
+#             (7.5000/2, 4.1000/2), #8
+#             (6.8888/2, 3.8333/2),
+#             (6.2000/2, 3.4500/2),
+#             (5.6364/2, 3.1364/2),
+#             (5.1667/2, 2.8750/2), #12
+#             (4.7692/2, 2.6538/2),
+#             (4.4286/2, 2.4643/2),
+#             (4.1333/2, 2.3000/2),
+#             (3.8000/2, 2.1562/2), #16
+#             (3.6471/2, 2.1000/2),
+#             (3.4444/2, 2.0294/2),
+#             (3.2632/2, 1.9167/2),
+#             (3.2000/2, 1.8000/2), ] #20
+#
+# # serial: 16092601
+# FOVS_16092601 = [(62.5000/2, 34.5000/2), #1
+#             (28.0000/2, 15.4560/2), #2
+#             (20.6666/2, 11.5000/2),
+#             (14.8500/2, 8.1972/2), #4
+#             (12.4000/2, 6.9000/2),
+#             (10.3333/2, 5.7500/2),
+#             (8.8571/2, 4.9286/2),
+#             (7.8500/2, 4.3332/2), #8
+#             (6.8888/2, 3.8333/2),
+#             (6.2000/2, 3.4500/2),
+#             (5.6364/2, 3.1364/2),
+#             (5.2000/2, 2.8704/2), #12
+#             (4.7692/2, 2.6538/2),
+#             (4.4286/2, 2.4643/2),
+#             (4.1333/2, 2.3000/2),
+#             (3.9500/2, 2.1804/2), #16
+#             (3.6471/2, 2.1000/2),
+#             (3.4444/2, 2.0294/2),
+#             (3.2632/2, 1.9167/2),
+#             (3.5000/2, 1.9320/2), ] #20
