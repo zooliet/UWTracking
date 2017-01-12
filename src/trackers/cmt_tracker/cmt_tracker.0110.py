@@ -14,7 +14,7 @@ class CMTTracker:
     THR_CONF = 0.75
     THR_RATIO = 0.8
     DESC_LENGTH = 512
-    MIN_NUM_OF_KEYPOINTS_FOR_BRISK_THRESHOLD = 900 # 900
+    MIN_NUM_OF_KEYPOINTS_FOR_BRISK_THRESHOLD = 100 # 900
     PREV_HISTORY_SIZE = 100
 
     def __init__(self, scale, rotation, cmt_detector_threshold = 70, best_effort = False):
@@ -26,44 +26,41 @@ class CMTTracker:
         self.descriptor = self.detector
         self.matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
 
-    def init(self, frame, options):
+    def init(self, frame):
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray = cv2.GaussianBlur(gray, (3, 3), 0)
 
-        # x1 = options['x1']
-        # x2 = options['x2']
-        # y1 = options['y1']
-        # y2 = options['y2']
-        #
-        # mask = np.zeros(gray.shape[:2], dtype=np.uint8)
-        # cv2.rectangle(mask, (x1, y1), (x2, y2), 255, -1)
-        # (x1, y1), (x2, y2) = util.selection_enlarged(mask, x1, y1, x2, y2, ratio=1)
-        # cv2.rectangle(mask, (x1, y1), (x2, y2), 255, -1)
-        # gray = cv2.bitwise_and(gray, gray, mask=mask)
-        #
-        # cv2.imshow('Mask', gray)
-
-        # (self.tl, self.br) = ((self.x1, self.y1), (self.x2, self.y2))
-        (tl, br) = ((self.x1, self.y1), (self.x2, self.y2))
-
+        (self.tl, self.br) = ((self.x1, self.y1), (self.x2, self.y2))
         self.cX = self.x1 + (self.x2 - self.x1) // 2
         self.cY = self.y1 + (self.y2 - self.y1) // 2
 
+        self.adjust_flag = False
         self.force_init_flag = False
         self.has_result = False
         self.frame_idx = 0
+        self.prev_scale_estimate = 1.0
+
+        self.mean_width = self.x2 - self.x1
+        self.mean_height = self.y2 - self.y1
+        self.mean_center = (self.cX, self.cY)
+
+        self.prev_widths = np.array([self.mean_width], dtype=np.int16)
+        self.prev_heights = np.array([self.mean_height], dtype=np.int16)
+        self.prev_centers = np.array([self.mean_center])
+
+        self.num_of_failure = 0
 
         # Get initial keypoints in whole image
         keypoints_cv = self.detector.detect(gray)
         # Remember keypoints that are in the rectangle as selected keypoints
-
         if len(keypoints_cv) == 0:
             # print("[CMT] No keypoints found somehow")
             num_selected_keypoints = 0
         else:
-            ind = util.in_rect(keypoints_cv, tl, br)
+            ind = util.in_rect(keypoints_cv, self.tl, self.br)
 
             selected_keypoints_cv = list(itertools.compress(keypoints_cv, ind))
+            background_keypoints_cv = list(itertools.compress(keypoints_cv, ~ind))
             selected_keypoints_cv, self.selected_features = self.descriptor.compute(gray, selected_keypoints_cv)
             selected_keypoints = util.keypoints_cv_to_np(selected_keypoints_cv)
             num_selected_keypoints = len(selected_keypoints_cv)
@@ -72,10 +69,10 @@ class CMTTracker:
 
         if num_selected_keypoints != 0:
             # Remember keypoints that are not in the rectangle as background keypoints
-            background_keypoints_cv = list(itertools.compress(keypoints_cv, ~ind))
+            # background_keypoints_cv = list(itertools.compress(keypoints_cv, ~ind))
+            # print("[CMT] num_background_keypoints is {}".format(len(background_keypoints_cv)))
             background_keypoints_cv, background_features = self.descriptor.compute(gray, background_keypoints_cv)
             _ = util.keypoints_cv_to_np(background_keypoints_cv)
-            # print("[CMT] num_background_keypoints is {}".format(len(background_keypoints_cv)))
 
             # Assign each keypoint a class starting from 1, background is 0
             self.selected_classes = np.array(range(num_selected_keypoints)) + 1
@@ -84,7 +81,7 @@ class CMTTracker:
             # Stack background features and selected features into database
             if len(background_keypoints_cv) > 0:
                 self.features_database = np.vstack((background_features, self.selected_features))
-            else: # hl1sqi
+            else:
                 self.features_database = self.selected_features
 
             # Same for classes
@@ -104,17 +101,16 @@ class CMTTracker:
                     angle = np.math.atan2(v[1], v[0])
                     # Store angle
                     angles[i1, i2] = angle
-
             self.angles = angles
 
             # Find the center of selected keypoints
             center = np.mean(selected_keypoints, axis=0)
 
             # Remember the rectangle coordinates relative to the center
-            self.center_to_tl = np.array(tl) - center
-            self.center_to_tr = np.array([br[0], tl[1]]) - center
-            self.center_to_br = np.array(br) - center
-            self.center_to_bl = np.array([tl[0], br[1]]) - center
+            self.center_to_tl = np.array(self.tl) - center
+            self.center_to_tr = np.array([self.br[0], self.tl[1]]) - center
+            self.center_to_br = np.array(self.br) - center
+            self.center_to_bl = np.array([self.tl[0], self.br[1]]) - center
 
             # Calculate springs of each keypoint
             self.springs = selected_keypoints - center
@@ -137,20 +133,20 @@ class CMTTracker:
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray = cv2.GaussianBlur(gray, (3, 3), 0)
 
-        # x1 = self.x1
-        # x2 = self.x2
-        # y1 = self.y1
-        # y2 = self.y2
-        #
-        # mask = np.zeros(gray.shape[:2], dtype=np.uint8)
-        # cv2.rectangle(mask, (x1, y1), (x2, y2), 255, -1)
-        # (x1, y1), (x2, y2) = util.selection_enlarged(mask, x1, y1, x2, y2, ratio=1)
-        # cv2.rectangle(mask, (x1, y1), (x2, y2), 255, -1)
-        # gray = cv2.bitwise_and(gray, gray, mask=mask)
-        # cv2.imshow('Mask', gray)
+        tracked_keypoints, _, self.removeClasses = self.track(gray)
 
+        if self.removeClasses.size > 0:
+            if np.all(np.in1d(self.removeClasses, self.selected_classes)) and np.all(np.in1d(self.removeClasses, self.classes_database)):
+                sorted_idx = np.argsort(self.selected_classes)
+                idx = sorted_idx[np.searchsorted(self.selected_classes[sorted_idx], self.removeClasses)]
+                self.selected_classes[idx] = 0
 
-        tracked_keypoints, _ = self.track(self.gray0, gray, self.active_keypoints)
+                sorted_idx = np.argsort(self.classes_database)
+                idx = sorted_idx[np.searchsorted(self.classes_database[sorted_idx], self.removeClasses)]
+                self.classes_database[idx] = 0
+            # print('[CMT] self.selected_classes:', self.selected_classes)
+            # print('[CMT] self.classes_database:', self.classes_database)
+
         (center, scale_estimate, rotation_estimate, tracked_keypoints) = self.estimate(tracked_keypoints)
 
         # Detect keypoints, compute descriptors
@@ -274,6 +270,13 @@ class CMTTracker:
             else: # Else use all tracked keypoints
                 active_keypoints = tracked_keypoints
 
+        if self.removeClasses.size > 0:
+            adjusted_center = np.mean(active_keypoints[:, :2], axis=0)
+            if np.sqrt(np.power(center - adjusted_center, 2).sum()) > 10: # need to adjust
+                self.adjust_flag = True
+                center = adjusted_center
+                # print("[CMT] Adjust center, springs and center_to_tl(tr, br, bl)")
+
         self.center = center
         self.scale_estimate = scale_estimate
         self.rotation_estimate = rotation_estimate
@@ -282,14 +285,7 @@ class CMTTracker:
         self.gray0 = gray
         self.frame_idx += 1
 
-        self.tl = (np.nan, np.nan)
-        self.tr = (np.nan, np.nan)
-        self.br = (np.nan, np.nan)
-        self.bl = (np.nan, np.nan)
-
-        self.has_result = False
-
-        if not any(np.isnan(self.center)) and self.active_keypoints.shape[0] > 4: #self.num_initial_keypoints / 10:
+        if not any(np.isnan(self.center)): # and self.active_keypoints.shape[0] > self.num_initial_keypoints / 10:
             self.has_result = True
 
             tl = util.array_to_int_tuple(center + scale_estimate * util.rotate(self.center_to_tl[None, :], rotation_estimate).squeeze())
@@ -301,15 +297,13 @@ class CMTTracker:
             self.tr = tr
             self.bl = bl
             self.br = br
+        else:
+            self.has_result = False
 
-    def track(self, prev_gray, current_gray, keypoints, THR_FB=20, tl=(0,0), br=(0, 0)):
-        if type(keypoints) is list:
-            keypoints = keypoints_cv_to_np(keypoints)
-
-        num_keypoints = keypoints.shape[0]
-
-        # Status of tracked keypoint - True means successfully tracked
+    def track(self, gray, THR_FB=20, tl=(0,0), br=(0, 0)):
+        num_keypoints = self.active_keypoints.shape[0]
         status = [False] * num_keypoints
+        wrong_selected = np.zeros(0)
 
         # If at least one keypoint is active
         if num_keypoints > 0:
@@ -317,19 +311,20 @@ class CMTTracker:
             # Add singleton dimension
             # Use only first and second column
             # Make sure dtype is float32
-            pts = keypoints[:, None, :2].astype(np.float32)
+            pts = self.active_keypoints[:, None, :2].astype(np.float32)
 
             # Calculate forward optical flow for prev_location
-            nextPts, status, _ = cv2.calcOpticalFlowPyrLK(prev_gray, current_gray, pts, None)
+            nextPts, status, _ = cv2.calcOpticalFlowPyrLK(self.gray0, gray, pts, None)
 
             # Calculate backward optical flow for prev_location
-            pts_back, _, _ = cv2.calcOpticalFlowPyrLK(current_gray, prev_gray, nextPts, None)
+            pts_back, _, _ = cv2.calcOpticalFlowPyrLK(gray, self.gray0, nextPts, None)
 
             # Remove singleton dimension
             # pts: (m, 1, 2) => (m, 2)
             # pts_back: (m, 1, 2) => (m, 2)
             # nextPts: (m, 1, 2) => (m, 2)
             # status: (m, 1) => (m,)
+
             pts_back = util.squeeze_pts(pts_back)
             pts = util.squeeze_pts(pts)
             nextPts = util.squeeze_pts(nextPts)
@@ -343,12 +338,42 @@ class CMTTracker:
             status = ~large_fb & status.astype(np.bool)
 
             nextPts = nextPts[status, :]
-            keypoints_tracked = keypoints[status, :]
+            keypoints_tracked = self.active_keypoints[status, :]
             keypoints_tracked[:, :2] = nextPts
-        else:
-            keypoints_tracked = np.array([])
+            pts = pts[status, :]
 
-        return keypoints_tracked, status
+            dists = np.sqrt(np.power(nextPts - pts, 2).sum(axis=1))
+            num_of_dists = len(dists)
+
+            if num_of_dists > 10:
+                dists_mean = np.mean(np.sort(dists)[-10:])
+            elif num_of_dists > 4:
+                dists_mean = np.mean(np.sort(dists)[-4:])
+            else:
+                dists_mean = np.mean(dists)
+            # print("[CMT] {} => {}".format(dists, dists_mean))
+
+            if self.best_effort is True:
+                DISPLAMENT = 0.3
+                TAGET_CRITERIA = 0.1
+
+                if dists_mean > DISPLAMENT:
+                    conditions = dists < TAGET_CRITERIA
+                    # print("[CMT] 배제될 조건:", conditions)
+                    wrong_selected = keypoints_tracked[conditions, 2]
+
+                    if wrong_selected.size > 0:
+                        # print("[CMT] wrong_selected:", wrong_selected)
+                        conditions = dists >= TAGET_CRITERIA
+                        # print("[CMT] 살아남을 조건:", conditions)
+                        # print('[CMT] keypoints_tracked(by classes):', keypoints_tracked[:, 2])
+                        keypoints_tracked = keypoints_tracked[conditions, :]
+                        # print('[CMT] keypoints_tracked(by classes) after filter:', keypoints_tracked[:, 2])
+
+        else:
+            keypoints_tracked = np.zeros((0,3))
+
+        return keypoints_tracked, status, wrong_selected
 
     def estimate(self, keypoints):
         center = np.array((np.nan, np.nan))
@@ -462,9 +487,11 @@ class CMTTracker:
 
                 # Compute object center
                 center = np.mean(votes, axis=0)
-            # else:
-            #     print("[CMT] All are duplicate.")
-        # else:
-        #     print("[CMT] At least 2 Keypoints are required for estimation.")
+            else:
+                self.num_of_failure += 1
+                # print("[CMT] All are duplicate.")
+        else:
+            self.num_of_failure += 1
+            # print("[CMT] At least 2 Keypoints are required for estimation.")
 
         return (center, scale_estimate, med_rot, keypoints)

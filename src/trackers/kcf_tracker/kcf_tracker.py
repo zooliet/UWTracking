@@ -96,7 +96,7 @@ def subwindow(img, window, borderType=cv2.BORDER_CONSTANT):
 
 # KCF tracker
 class KCFTracker:
-    PREV_HISTORY_SIZE = 100
+    PREV_HISTORY_SIZE = 10
 
     def __init__(self, hog=False, fixed_window=True, multiscale=False):
         self.lambdar = 0.0001   # regularization
@@ -289,15 +289,9 @@ class KCFTracker:
         self._tmpl = (1-train_interp_factor)*self._tmpl + train_interp_factor*x
         self._alphaf = (1-train_interp_factor)*self._alphaf + train_interp_factor*alphaf
 
-
     def init(self, image):
 
         self.force_init_flag = False
-        self.consecutive_cmt_lost = 0
-        self.consecutive_cmt_found = 0
-        self.cmt_was_found = False
-        self.area = (self.x2-self.x1) * (self.y2-self.y1)
-
 
         roi = [self.x1, self.y1, self.x2-self.x1, self.y2-self.y1]
         self._roi = list(map(float, roi))
@@ -423,4 +417,5 @@ class KCFTracker:
         self.train(x, self.interp_factor)
 
         # hl1sqi
-        return self._roi, peak_value, loc
+        self.peak_value = peak_value
+        return self._roi, loc

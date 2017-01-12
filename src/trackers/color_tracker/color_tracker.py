@@ -7,7 +7,7 @@ class ColorTracker():
 
     CENTER_DISPLACEMENT = 50
     LOST_CONDITION = 150 # 30ms * 100 = 3 sec
-    FOUND_CONDITION = 1
+    FOUND_CONDITION = 2
 
     def __init__(self):
         # red
@@ -24,6 +24,7 @@ class ColorTracker():
         y1 = options['y1']
         y2 = options['y2']
         self.consecutive_lost = 0
+        self.consecutive_found = 0
 
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         # hsv[:,:,2] = cv2.equalizeHist(hsv[:,:,2])
@@ -103,12 +104,14 @@ class ColorTracker():
             # print("[COLOR] prev center({}) to largest({}) and to the next largest({})".format(self.cener, dist0, dist1))
             if dist0 <= dist1: # and dist0 < self.CENTER_DISPLACEMENT:
                 self.center = center0
-                cv2.rectangle(frame, (x0,y0), (x0+w0, y0+h0), (255,0,0), 2)
+                # cv2.rectangle(frame, (x0,y0), (x0+w0, y0+h0), (255,0,0), 2)
                 self.consecutive_lost = 0
+                self.consecutive_found += 1
             else: # elif dist0 > dist1: # and dist1 < self.CENTER_DISPLACEMENT:
                 self.center = center1
-                cv2.rectangle(frame, (x1,y1), (x1+w1, y1+h1), (255,0,0), 2)
+                # cv2.rectangle(frame, (x1,y1), (x1+w1, y1+h1), (255,0,0), 2)
                 self.consecutive_lost = 0
+                self.consecutive_found += 1
             # elif self.consecutive_lost > self.LOST_CONDITION: # 100
             #     if dist0 <= dist1:
             #         self.center = center0
@@ -122,3 +125,4 @@ class ColorTracker():
 
         else:
             self.consecutive_lost += 1
+            self.consecutive_found = 0

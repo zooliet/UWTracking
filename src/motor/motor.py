@@ -62,7 +62,7 @@ class Motor:
 
     def has_finished_moving(self, args):
         self.is_moving = False
-        print("[MOTOR] End of Moving")
+        # print("[MOTOR] End of Moving")
 
     def send_packet(self, buffer):
         crc8 = self.crc8_calc(buffer[2:-1])
@@ -86,7 +86,7 @@ class Motor:
 
     def move(self, x = 255, y = 255, z = 0, f = 0,  t = 1, rel = 0xff):
         t = int(t * 1000000) # sec to us
-        print("[MOTOR] Move: x: {} y: {} t: {} rel: {}".format(x, y, t, rel))
+        # print("[MOTOR] Move: x: {} y: {} t: {} rel: {}".format(x, y, t, rel))
 
         if (self.sum_of_x_degree > 90 and x > 0) or (self.sum_of_x_degree < -90 and x < 0):
             x = 0
@@ -132,7 +132,7 @@ class Motor:
         y = int(y_degree/self.DEGREE_PER_PULSE)
         z = f = 0
 
-        print("[MOTOR] ({}px, {}px) => ({:.4f}°, {:.4f}°) => ({}, {}) pulse".format(x_px, y_px, x_degree, y_degree, x, y))
+        # print("[MOTOR] ({}px, {}px) => ({:.4f}°, {:.4f}°) => ({}, {}) pulse".format(x_px, y_px, x_degree, y_degree, x, y))
         return x, y, z, f
 
     def move_to(self, x, y, current_zoom=1):
@@ -150,7 +150,7 @@ class Motor:
             # SPEEDS = list(map(lambda idx: int(120000 * self.FOVS[idx-1][0]/self.FOVS[0][0]), list(range(0,21))))
             # SPEEDS = [3000, 60000, 30000, 0, 15000, 0, 0, 0, 7500, 0, 0, 0, 5000, 0, 0, 0, 3750, 0, 0, 0, 3000]
             SPEEDS = [6000, 60000, 30000, 0, 30000, 0, 0, 0, 15000, 0, 0, 0, 10000, 0, 0, 0, 7500, 0, 0, 0, 6000]
-            print(SPEEDS)
+            # print(SPEEDS)
             SPEED = SPEEDS[current_zoom]
             MAX_MOVING_TIME = 0.05 # 0.1 for 100 ms
             d = max(abs(x_to), abs(y_to))
@@ -187,7 +187,7 @@ class Motor:
         # zoom.stop_zooming()
         self.is_zooming = False
         self.current_zoom = zoom
-        print("[ZOOM] End of Zooming")
+        # print("[ZOOM] End of Zooming")
 
     def zoom_x1(self):
         # print('[ZOOM] to x1')
@@ -204,6 +204,7 @@ class Motor:
     def zoom_to(self, x, dur=0.1):
         # print('[ZOOM] to', x)
         zoom_to_preset = {1: 1, 2: 2, 4: 3, 8: 4, 16: 5} # zoom to preset
+        # print('[Debug] x = ', x)
         preset = zoom_to_preset[x]
 
         buffer = [0xff,0x01,0x00,0x07,0x00,preset,0x00]
@@ -289,7 +290,7 @@ class Motor:
 
         zoom_in_length = target_length * (normalized_length[zoom_in_idx]/normalized_length[idx])
         zoom_out_length = target_length * (normalized_length[zoom_out_idx]/normalized_length[idx])
-        max_length = self.WIDTH * 0.4
+        max_length = self.WIDTH * 0.3
         # print("[ZOOM] Current: {:02.0f}, Zoom in: {:02.0f}, Zoom out: {:02.0f}".format(target_length, zoom_in_length, zoom_out_length))
 
         if target_length >= max_length + 20:
