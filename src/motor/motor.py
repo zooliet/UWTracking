@@ -28,6 +28,7 @@ class Motor:
 
         self.is_moving = False
         self.is_zooming = False
+        self.stop_moving = False
         self.available_zooms = [1,2,4,8,16]
         self.current_zoom = 1
 

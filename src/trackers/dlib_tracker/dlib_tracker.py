@@ -4,14 +4,18 @@ import numpy as np
 import imutils
 from utils import util
 import dlib
+import itertools
 
 class DLIBTracker:
     def __init__(self):
         self._tracker = dlib.correlation_tracker()
+        self.detector = cv2.BRISK_create(10)
+        # self.detector = cv2.AKAZE_create()
+        # self.detector = cv2.xfeatures2d.SIFT_create()
+        self.matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
 
     def init(self, frame):
         self._tracker.start_track(frame, dlib.rectangle(self.x1, self.y1, self.x2, self.y2))
-
         self.force_init_flag = False
         self.enable = True
 
