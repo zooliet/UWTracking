@@ -91,13 +91,13 @@ def draw_str(dst, target, s, color = (0, 0, 0)):
     cv2.putText(dst, s, (x+1, y+1), cv2.FONT_HERSHEY_PLAIN, 1.0, (color), thickness = 2, lineType=cv2.LINE_AA)
     cv2.putText(dst, s, (x, y), cv2.FONT_HERSHEY_PLAIN, 1.0, (255, 255, 255), lineType=cv2.LINE_AA)
 
-def draw_keypoints(keypoints, im, color=(255, 0, 0)):
+def draw_keypoints(keypoints, im, color=(255, 0, 0), radius = 3, fill = 0):
     for k in keypoints:
-        radius = 3  # int(k.size / 2)
+        # radius = 3  # int(k.size / 2)
         center = (int(k[0]), int(k[1]))
 
         # Draw circle
-        cv2.circle(im, center, radius, color)
+        cv2.circle(im, center, radius, color, fill)
 
 def draw_keypoints_by_number(keypoints, im, color = (255, 0, 0)):
     for k in keypoints:

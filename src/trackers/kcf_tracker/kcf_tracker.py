@@ -99,6 +99,8 @@ class KCFTracker:
     PREV_HISTORY_SIZE = 10
 
     def __init__(self, hog=False, fixed_window=True, multiscale=False):
+        self.enable = True
+
         self.lambdar = 0.0001   # regularization
         self.padding = 2.5   # extra area surrounding the target
         self.output_sigma_factor = 0.125   # bandwidth of gaussian target

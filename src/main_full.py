@@ -10,9 +10,14 @@ import cv2
 import numpy as np
 import imutils
 
-from trackers.kcf_tracker import KCFTracker
 from trackers.color_tracker import ColorTracker
+from trackers.kcf_tracker import KCFTracker
+from trackers.cmt_tracker import CMTTracker
+from trackers.tld_tracker import TLDTracker
+from trackers.dlib_tracker import DLIBTracker
 from trackers.motion_tracker import MotionTracker
+from trackers.kpm_tracker import KPMTracker
+from trackers.klt_tracker import KLTTracker
 from motor import Motor
 
 import math
@@ -82,7 +87,6 @@ capture = None
 tracking_window = {'x1': -1, 'y1': -1, 'x2': -1, 'y2': -1, 'dragging': False, 'start': False}
 show_lap_time_flag = False
 upscale_flag = False
-wide_zoom_flag = False
 
 def onmouse(event, x, y, flags, param):
     if event == cv2.EVENT_LBUTTONDOWN:
@@ -128,7 +132,7 @@ else:
     zoom = None
 
 if args['color'] is True:
-    color_tracker = ColorTracker(width = WIDTH, height = HEIGHT)
+    color_tracker = ColorTracker()
 else:
     color_tracker = None
 
@@ -164,7 +168,18 @@ while True:
                 if zoom:
                     selected_width = int(selected_width / zoom.current_zoom)
                     selected_height = int(selected_height / zoom.current_zoom)
+
                 # print("[KCF] User selected width {} and height {}".format(selected_width, selected_height) )
+
+                if color_tracker:
+                    if color_tracker.init(frame, options = tracking_window):
+                        print('[COLOR] Color Found at {}'.format(color_tracker.center))
+                    else:
+                        print('[COLOR] Color Not Found around at {}'.format(color_tracker.center))
+                    tracking_processing_flag = True # 초기화 결과에 상관없이 tracking 시작
+
+                elif motion_tracker:
+                    motion_tracker.motion_count = 0
 
                 if kcf_tracker:
                     kcf_tracker.x1 = tracking_window['x1']
@@ -176,12 +191,7 @@ while True:
                     kcf_tracker.init(frame)
                     tracking_processing_flag = True # 초기화 결과에 상관없이 tracking 시작
 
-                    if color_tracker:
-                        color_tracker.init(0)
-                    elif motion_tracker:
-                        motion_tracker.init(0)
-                        if motor:
-                            motor.stop_moving = False
+
 
             elif motor and motor.is_moving is not True:
                 centerX = (tracking_window['x1'] + tracking_window['x2']) // 2
@@ -203,6 +213,18 @@ while True:
                 print("[INFO] Tracking duration: {:04.0f} ms @{}".format(1000*(toc-tic), current_time))
                 tic = toc
 
+            if color_tracker:
+                if kcf_tracker and kcf_tracker.enable:
+                    color_tracker.update(frame, {'x1': kcf_tracker.x1, 'y1':kcf_tracker.y1, 'x2': kcf_tracker.x2, 'y2': kcf_tracker.y2})
+                # if kcf_tracker and kcf_tracker.enable is False:
+                #     color_tracker.update(frame, {'x1': 0, 'y1': 0, 'x2': WIDTH, 'y2': HEIGHT}, find_by_area = True)
+                else:
+                    color_tracker.update(frame, {'x1': 0, 'y1': 0, 'x2': WIDTH, 'y2': HEIGHT})
+
+                if color_tracker.consecutive_lost == 0:
+                    # cv2.drawMarker(frame_draw, tuple(color_tracker.center), (255, 0, 0), 0)
+                    cv2.rectangle(frame_draw, (color_tracker.x1, color_tracker.y1), (color_tracker.x2, color_tracker.y2), (255, 0, 0), 2)
+
             if kcf_tracker:
                 if kcf_tracker.force_init_flag is True:
                     print('[KCF] Force init')
@@ -214,19 +236,68 @@ while True:
 
                     # 이탈 정도(0.25), motion_tracker.interval, waitKey(x) 조정 필요
                     if kcf_tracker.peak_value < 0.25:
-                        print('[KCF] Disabled: peak value({:.02f}) is too low'.format(kcf_tracker.peak_value))
                         kcf_tracker.enable = False
-                        wide_zoom_flag = True
+                        print('[KCF] Disabled: peak value({:.02f}) is too low'.format(kcf_tracker.peak_value))
+                        if color_tracker:
+                            color_tracker.consecutive_found = 0 # FOUND_CONDITION을 충족시키는 시간을 벌기위한 조치
+                        elif motion_tracker:
+                            if motor:
+                                motor.stop_moving = True
+                                motion_tracker.init(1) # stop_moving 처리 시간이 어차피 필요하니까 인자값을 더 크게?
+                            else:
+                                motion_tracker.init(1)
 
                     else:
-                        wide_zoom_flag = False
-
                         kcf_tracker.x1 = boundingbox[0]
                         kcf_tracker.y1 = boundingbox[1]
                         kcf_tracker.x2 = boundingbox[0] + boundingbox[2]
                         kcf_tracker.y2 = boundingbox[1] + boundingbox[3]
                         kcf_tracker.center = ((kcf_tracker.x1 + kcf_tracker.x2) // 2, (kcf_tracker.y1 + kcf_tracker.y2) // 2)
 
+                    continue_flag = True
+                    wide_zoom_flag = False
+
+                    if kcf_tracker.enable == False:
+                        wide_zoom_flag = True
+
+                    if color_tracker:
+                        if color_tracker.consecutive_found > color_tracker.FOUND_CONDITION:
+                            diff_width = abs(color_tracker.center[0] - kcf_tracker.center[0])
+                            diff_height = abs(color_tracker.center[1] - kcf_tracker.center[1])
+                            if diff_width > boundingbox[2] // 6 or diff_height < boundingbox[3] // 6: # boundingbox[2] == width
+                                # print("[KCF] Adjust center with color object")
+                                # print("[KCF] Bounding({},{}) vs Mean({},{})".format(boundingbox[2], boundingbox[3], kcf_tracker.mean_width, kcf_tracker.mean_height))
+                                kcf_tracker.x1 = color_tracker.center[0] - kcf_tracker.mean_width // 2
+                                kcf_tracker.x2 = color_tracker.center[0] + kcf_tracker.mean_width // 2
+                                kcf_tracker.y1 = int(color_tracker.center[1] - kcf_tracker.mean_height / 4)
+                                kcf_tracker.y2 = int(color_tracker.center[1] + kcf_tracker.mean_height * 3 / 4)
+                                kcf_tracker.center = ((kcf_tracker.x1 + kcf_tracker.x2) // 2, (kcf_tracker.y1 + kcf_tracker.y2) // 2)
+                                print('[KCF] kcf and color center mismatch => force init')
+                                kcf_tracker.force_init_flag = True
+                                continue_flag = False
+
+                        elif color_tracker.consecutive_lost >= color_tracker.LOST_CONDITION:
+                            kcf_tracker.enable = False
+                            kcf_tracker.mean_width = selected_width
+                            kcf_tracker.mean_height = selected_height
+                            kcf_tracker.prev_widths = np.array([kcf_tracker.mean_width], dtype=np.int16)
+                            kcf_tracker.prev_heights = np.array([kcf_tracker.mean_height], dtype=np.int16)
+                            continue_flag = False
+                            wide_zoom_flag = True
+
+                    elif motion_tracker and motion_tracker.motion_count != 0:
+                        continue_flag = False
+                        # wide_zoom_flag = True
+                    elif kpm_tracker:
+                        kpm_tracker.update(frame)
+                        # cv2.rectangle(frame_draw, kpm_tracker.tl, kpm_tracker.br, (0,0,255),2)
+                        # util.draw_keypoints(kpm_tracker.initial_keypoints, frame_draw, (0, 0, 255))
+                        # util.draw_keypoints(kpm_tracker.active_keypoints, frame_draw, (255, 255, 255))
+
+                    #     if kpm_tracker.has_result:
+                    #         cv2.rectangle(frame_draw, kpm_tracker.tl, kpm_tracker.br, (0,0,255), 2)
+
+                    if continue_flag is True:
                         kcf_tracker.prev_widths = np.append(kcf_tracker.prev_widths, boundingbox[2])
                         kcf_tracker.prev_heights = np.append(kcf_tracker.prev_heights, boundingbox[3])
 
@@ -243,38 +314,44 @@ while True:
                         cv2.rectangle(frame_draw,(kcf_tracker.x1,kcf_tracker.y1), (kcf_tracker.x2,kcf_tracker.y2), (0,255,0), 1)
                         cv2.drawMarker(frame_draw, tuple(kcf_tracker.center), (0,255,0))
 
+                        # if args['autozoom'] and zoom.is_zooming is not True and motor.is_moving is False:
+                        #     next_zoom = zoom.find_next_auto_zoom(current_length = kcf_tracker.mean_width)
+                        #     if next_zoom != zoom.current_zoom:
+                        #         # print("[ZOOM] {} to {}".format(zoom.current_zoom, next_zoom))
+                        #         zoom.zoom_to(next_zoom, dur=3)
+
+                    # if wide_zoom_flag is True:
+                    #     if zoom and zoom.current_zoom != 1:
+                    #         current_zoom = 1
+                    #         zoom.zoom_to(current_zoom, dur=3)
+
                 else: # kcf_tracker.enable is False
-                    if color_tracker and (zoom is None or zoom.is_zooming is False):
-                        if color_tracker.check_interval():
-                            mask = {'x1':WIDTH//4, 'y1': HEIGHT//4, 'x2': int(WIDTH*3/4), 'y2': int(HEIGHT*3/4)}
-                            color_tracker.update(frame, options = mask, find_by_area=False)
-                            if not any(np.isnan(color_tracker.center)):
-                                kcf_tracker.x1 = color_tracker.center[0] - selected_width // 2
-                                kcf_tracker.x2 = color_tracker.center[0] + selected_width // 2
-                                kcf_tracker.y1 = int(color_tracker.center[1] - selected_height / 4)
-                                kcf_tracker.y2 = int(color_tracker.center[1] + selected_height * 3 / 4)
-                                kcf_tracker.center = ((kcf_tracker.x1 + kcf_tracker.x2) // 2, (kcf_tracker.y1 + kcf_tracker.y2) // 2)
-                                kcf_tracker.force_init_flag = True
-                                print('[KCF] kcf disabled and color found => force init')
+                    if color_tracker and color_tracker.consecutive_found > color_tracker.FOUND_CONDITION and (zoom is None or zoom.is_zooming is False):
+                        kcf_tracker.x1 = color_tracker.center[0] - kcf_tracker.mean_width // 2
+                        kcf_tracker.x2 = color_tracker.center[0] + kcf_tracker.mean_width // 2
+                        kcf_tracker.y1 = int(color_tracker.center[1] - kcf_tracker.mean_height / 4)
+                        kcf_tracker.y2 = int(color_tracker.center[1] + kcf_tracker.mean_height * 3 / 4)
+                        kcf_tracker.center = ((kcf_tracker.x1 + kcf_tracker.x2) // 2, (kcf_tracker.y1 + kcf_tracker.y2) // 2)
+                        print('[KCF] kcf disabled and color found => force init')
+                        kcf_tracker.force_init_flag = True
                     elif motion_tracker and (zoom is None or zoom.is_zooming is False) and (motor is None or motor.is_moving is False):
+                        wide_zoom_flag = True
                         if motion_tracker.check_interval():
-                            mask = {'x1':0, 'y1': 0, 'x2': WIDTH-1, 'y2': HEIGHT-1}
-                            motion_tracker.update(frame, prev_frame, options = mask)
-                            if not any(np.isnan(motion_tracker.center)):
-                                kcf_tracker.x1 = motion_tracker.x1
-                                kcf_tracker.y1 = motion_tracker.y1
-                                kcf_tracker.x2 = motion_tracker.x2
-                                kcf_tracker.y2 = motion_tracker.y2
-                                kcf_tracker.center = motion_tracker.center
+                            (x1, y1, x2, y2) = motion_tracker.update(frame, prev_frame)
+                            if x1 != -1:
+                                kcf_tracker.x1 = x1
+                                kcf_tracker.y1 = y1
+                                kcf_tracker.x2 = x2
+                                kcf_tracker.y2 = y2
                                 kcf_tracker.force_init_flag = True
-                                print('[KCF] kcf disabled and motion detected => force init')
 
                             if motor:
                                 motor.stop_moving = False
 
-            if wide_zoom_flag and zoom.is_zooming is not True and zoom and zoom.current_zoom != 1:
-                current_zoom = 1
-                zoom.zoom_to(current_zoom, dur=2)
+            if wide_zoom_flag is True:
+                if zoom and zoom.current_zoom != 1:
+                    current_zoom = 1
+                    zoom.zoom_to(current_zoom, dur=3)
 
             if motor and motor.is_moving is not True and motor.stop_moving is False: # and zoom.is_zooming is not True:
                 motor.driving_flag = False
@@ -283,6 +360,12 @@ while True:
                     if kcf_tracker.enable:
                         cX, cY = kcf_tracker.center
                         motor.driving_flag = True
+                elif color_tracker and color_tracker.consecutive_lost < color_tracker.FOUND_CONDITION:
+                    cX, cY = color_tracker.center
+                    motor.driving_flag = True
+                elif cmt_tracker and cmt_tracker.has_result:
+                    cX, cY = cmt_tracker.box_center
+                    motor.driving_flag = True
                 else:
                     cX = HALF_WIDTH
                     cY = HALF_HEIGHT
@@ -304,7 +387,7 @@ while True:
                 next_zoom = zoom.find_next_auto_zoom(current_length = kcf_tracker.mean_width)
                 if next_zoom != zoom.current_zoom:
                     # print("[ZOOM] {} to {}".format(zoom.current_zoom, next_zoom))
-                    zoom.zoom_to(next_zoom, dur=2)
+                    zoom.zoom_to(next_zoom, dur=3)
 
 
         cv2.line(frame_draw, (HALF_WIDTH, 0), (HALF_WIDTH, WIDTH), (200, 200, 200), 0)
@@ -328,23 +411,11 @@ while True:
         if pause_flag is False:
             zoom_str = "x{}".format(zoom.current_zoom)
             util.draw_str(frame_draw, (20, 20), zoom_str)
+            kcf_str = "Processing: {}, Enable: {}".format(tracking_processing_flag, kcf_tracker.enable)
+            util.draw_str(frame_draw, (WIDTH-300, 20), kcf_str)
 
-            if kcf_tracker:
-                if tracking_processing_flag and kcf_tracker.enable:
-                    kcf_str = "Tracking: on"
-                else:
-                    kcf_str = "Tracking: off"
-                util.draw_str(frame_draw, (WIDTH-120, 20), kcf_str)
-
-            if color_tracker:
-                if color_tracker.frame_count > 1:
-                    color_str = "Countdown: {}".format(color_tracker.interval - color_tracker.frame_count)
-                    util.draw_str(frame_draw, (int(WIDTH/2 - 60), 20), color_str)
-
-            if motion_tracker:
-                if motion_tracker.frame_count > 1:
-                    motion_str = "Countdown: {}".format(motion_tracker.interval - motion_tracker.frame_count)
-                    util.draw_str(frame_draw, (int(WIDTH/2 - 60), 20), motion_str)
+            color_str = "Lost: {} and Found: {}".format(color_tracker.consecutive_lost, color_tracker.consecutive_found)
+            util.draw_str(frame_draw, (WIDTH//2-100, 20), color_str)
 
             cv2.imshow("Tracking", frame_draw)
 
@@ -366,7 +437,7 @@ while True:
             upscale = imutils.resize(selected, width=FRAME_WIDTH)
             cv2.imshow("Upscale", upscale)
 
-        key = cv2.waitKey(31)
+        key = cv2.waitKey(1)
         if key == 27 or key == ord('q'):
             break
         elif key == ord(' '):
@@ -379,18 +450,39 @@ while True:
                 cv2.destroyWindow('Upscale')
         elif key == ord('f'):
             if kcf_tracker:
-                if color_tracker:
-                    kcf_tracker.enable = False
-                    if zoom:
-                        wide_zoom_flag = True
-                elif motion_tracker:
-                    kcf_tracker.enable = False
-                    motion_tracker.frame_count = 75
-                    if zoom:
-                        wide_zoom_flag = True
-
+                # print("[DEBUG] kcf enabled: {}, zoom: {}, color: {}/{}".format(kcf_tracker.enable, zoom.is_moving, color_tracker.consecutive_lost, color_tracker.consecutive_found))
+                if motion_tracker:
+                    # wide_zoom_flag = True
                     if motor:
+                        kcf_tracker.enable = False
                         motor.stop_moving = True
+                        motion_tracker.init(5) # stop_moving 처리 시간이 어차피 필요하니까 인자값을 더 크게?
+                    else:
+                        motion_tracker.init(5)
+                        kcf_tracker.enable = False
+                        # 어차피 모터 제어가 안되면 기다리지 말고 바로 수행할 수도
+                        # (x1, y1, x2, y2) = motion_tracker.update(frame, prev_frame)
+                        # if x1 != -1:
+                        #     kcf_tracker.x1 = x1
+                        #     kcf_tracker.y1 = y1
+                        #     kcf_tracker.x2 = x2
+                        #     kcf_tracker.y2 = y2
+                        #     kcf_tracker.force_init_flag = True
+                # elif kpm_tracker:
+                #     kpm_tracker.update(frame)
+                #     if kpm_tracker.has_result:
+                #         print("[KPM] has result: {}, {}".format(kpm_tracker.tl, kpm_tracker.br))
+                #         (kcf_tracker.x1, kcf_tracker.y1) = kpm_tracker.tl
+                #         (kcf_tracker.x2, kcf_tracker.y2) = kpm_tracker.br
+                #         kcf_tracker.force_init_flag = True
+                #         # cv2.rectangle(frame_draw, kpm_tracker.tl, kpm_tracker.br, (0,0,255), 2)
+                #
+                #     else:
+                #         print("[KPM] No result")
+
+            # elif dlib_tracker:
+            #     dlib_tracker.match(frame)
+            #     dlib_tracker.find_motion(frame, prev_frame)
 
         elif key == 65362: # 'up', 63232 for Mac
             if zoom and zoom.is_zooming is not True:

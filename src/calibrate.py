@@ -41,8 +41,10 @@ ap.add_argument("-z", "--zoom", help = "path to zoom control port")
 args = vars(ap.parse_args())
 print("[INFO] Command: ", args)
 
+FRAME_WIDTH       = 1980  # 640x360, 1024x576, 1280x720, 1920x1080
+FRAME_HEIGHT      = FRAME_WIDTH * 9 // 16
 
-WIDTH       = 640  # 640x360, 1024x576, 1280x720, 1920x1080
+WIDTH       = 1024  # 640x360, 1024x576, 1280x720, 1920x1080
 HEIGHT      = WIDTH * 9 // 16
 HALF_WIDTH  = WIDTH // 2
 HALF_HEIGHT = HEIGHT // 2
@@ -56,8 +58,8 @@ else:
     stream = cv2.VideoCapture(args['camera'])
     grabbed, frame = stream.read()
 
-stream.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
-stream.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT)
+stream.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_WIDTH)
+stream.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
 
 pause_flag = False
 capture = None
@@ -140,7 +142,7 @@ phMin = psMin = pvMin = phMax = psMax = pvMax = 0
 while True:
     if pause_flag is False:
         grabbed, frame = stream.read()
-        # frame = imutils.resize(frame, width = WIDTH)
+        frame = imutils.resize(frame, width = WIDTH)
         # print("[INFO] frame.shape: ", frame.shape)
 
         if color_select_flag is True:
@@ -181,14 +183,21 @@ while True:
                 height = tracking_window['y2'] - tracking_window['y1']
                 area = width * height
                 print("[Debug] Area:{}, Width: {}, Height: {} @ x{}".format(area, width, height, current_zoom))
+                # roi = frame[tracking_window['y1']:tracking_window['y2'],tracking_window['x1']:tracking_window['x2']]
+                # blur = cv2.GaussianBlur(roi, (123, 123), 0)
+                # cv2.imshow('ROI and Blur', np.hstack([roi, blur]))
+                # blur = cv2.GaussianBlur(frame, (123, 123), 0)
+                # cv2.imshow('Frame and Blur', np.hstack([frame, blur]))
+
             else:
-                if False: # color_select_flag is True:
+                if False: #color_select_flag is True:
                     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
                     roi = frame[tracking_window['x1']-10:tracking_window['x1']+10, tracking_window['y1']-10:tracking_window['y1']+10]
                     (means, stds) = cv2.meanStdDev(roi)
                     # print("[INFO] HSV means: {}, stds: {}".format(means, stds))
                     print("H:{:03d}±{:02d}, S:{:03d}±{:02d}, V:{:03d}±{:02d}".
                     format(int(means[0,0]), int(stds[0,0]), int(means[1,0]), int(stds[1,0]), int(means[2,0]), int(stds[2,0])))
+
                     #
                     # lower = cv2.subtract(np.uint8([means]), np.uint8([stds]))
                     # upper = cv2.add(np.uint8([means]), np.uint8([stds]))

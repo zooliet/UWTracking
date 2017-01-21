@@ -8,27 +8,18 @@ import itertools
 class MotionTracker:
     def __init__(self):
         self.interval = 100
-        self.frame_count = 0
+        self.motion_count = 0
 
     def init(self, count):
-        self.frame_count = count
+        self.motion_count = count
 
-    def update(self, frame, prev_frame, options = {'x1': 0, 'y1':0, 'x2': 640, 'y2': 360}):
-        x1 = options['x1']
-        x2 = options['x2']
-        y1 = options['y1']
-        y2 = options['y2']
-
-        mask = np.zeros(frame.shape[:2], dtype=np.uint8)
-        cv2.rectangle(mask, (x1, y1), (x2, y2), 255, -1)
+    def update(self, frame, prev_frame):
+        self.motion_count = 0
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
         gray = cv2.GaussianBlur(gray, (7,7), 0)
         prev_gray = cv2.GaussianBlur(prev_gray, (7,7), 0)
-
-        gray = cv2.bitwise_and(gray, gray, mask=mask)
-        prev_gray = cv2.bitwise_and(prev_gray, prev_gray, mask=mask)
 
         diffed = cv2.absdiff(prev_gray, gray)
 
@@ -56,8 +47,6 @@ class MotionTracker:
         binary = cv2.inRange(frame, (0,0,255), (0,0,255))
         binary = cv2.GaussianBlur(binary, (11, 11), 0)
         (_, contours, _) = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        self.center = (np.nan, np.nan)
         if len(contours) > 0:
             contour = sorted(contours, key=cv2.contourArea, reverse=True)[0]
             (x, y, w, h) = cv2.boundingRect(contour)
@@ -68,9 +57,11 @@ class MotionTracker:
             # return x, y, x+w, y+h
 
             mask = np.zeros(frame.shape[:2], dtype=np.uint8)
-            (self.x1, self.y1), (self.x2, self.y2) = util.selection_enlarged(mask, x, y, x+w, y+h, ratio=0.8)
+            (x1, y1), (x2, y2) = util.selection_enlarged(mask, x, y, x+w, y+h, ratio=0.8)
             # print(x, y, x+w, y+h, '=>', x1, y1, x2, y2)
-            self.center = np.int32([x + w//2, y + h//2])
+            return x1, y1, x2, y2
+        else:
+            return -1, -1, -1, -1
 
         # centers = []
         # for (i, c) in enumerate(cnts):
@@ -98,9 +89,5 @@ class MotionTracker:
         #     self.y1 = self.cY - (self.h // 2)
 
     def check_interval(self):
-        self.frame_count += 1
-        if self.frame_count % self.interval == 0:
-            self.frame_count = 0
-            return True
-        else:
-            return False
+        self.motion_count += 1
+        return self.motion_count % self.interval == 0

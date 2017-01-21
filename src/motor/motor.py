@@ -2,6 +2,7 @@ import struct
 import serial
 import time
 from threading import Timer
+import math
 
 class Motor:
     TABLE = [0,  94, 188, 226,  97,  63, 221, 131, 194, 156, 126,  32, 163, 253,  31,  65,
@@ -30,12 +31,14 @@ class Motor:
         self.is_zooming = False
         self.stop_moving = False
         self.available_zooms = [1,2,4,8,16]
+        self.zoom_to_preset = {1: 1, 2: 2, 4: 3, 8: 4, 16: 5}
         self.current_zoom = 1
 
         self.WIDTH = screen_width # 640x360, 1024x576, 1280x720, 1920x1080
         self.HEIGHT = int(self.WIDTH * 9 / 16)
         self.HALF_WIDTH = self.WIDTH // 2
         self.HALF_HEIGHT = self.HEIGHT // 2
+        self.scale = 0.3
 
         self.DEGREE_PER_PULSE = 0.00048 # 0.00048은 현재 사용 모터와 기어비로 결정되는 펄스 당 회전 각도 (degree)
 
@@ -137,58 +140,80 @@ class Motor:
         return x, y, z, f
 
     def move_to(self, x, y, current_zoom=1):
-        motor_timer = Timer(1, self.has_finished_moving, args = [False])
         (x_to, y_to, z_to, f_to) = self.pixel_to_pulse(x, y, current_zoom, limit = False)
-        self.move(x = x_to, y = y_to, z = z_to, f = f_to, t = 1)
+        t_sec = 1
+        self.move(x = x_to, y = y_to, z = z_to, f = f_to, t = t_sec)
+        motor_timer = Timer(t_sec * 2, self.has_finished_moving, args = [False])
         motor_timer.start()
         self.is_moving = True
 
-    def track(self, center_to_x, center_to_y, current_zoom=1):
-        if abs(center_to_x) > 2 or abs(center_to_y) > 2:
-            (x_to, y_to, z_to, f_to) = self.pixel_to_pulse(center_to_x, center_to_y, current_zoom, limit = True)
+    def track1(self, center_to_x, center_to_y, current_zoom=1):
+        (x_to, y_to, z_to, f_to) = self.pixel_to_pulse(center_to_x, center_to_y, current_zoom, limit = True)
+        SPEEDS = list(map(lambda idx: int(60000 * self.FOVS[idx-1][0]/self.FOVS[0][0]), list(range(0,21))))
+        SPEED = SPEEDS[current_zoom]
 
-            # SPEED = 12000 # full speed: 120000, half speed: 600000
-            # SPEEDS = list(map(lambda idx: int(120000 * self.FOVS[idx-1][0]/self.FOVS[0][0]), list(range(0,21))))
-            # SPEEDS = [3000, 60000, 30000, 0, 15000, 0, 0, 0, 7500, 0, 0, 0, 5000, 0, 0, 0, 3750, 0, 0, 0, 3000]
-            SPEEDS = [6000, 60000, 30000, 0, 30000, 0, 0, 0, 15000, 0, 0, 0, 10000, 0, 0, 0, 7500, 0, 0, 0, 6000]
-            # print(SPEEDS)
-            SPEED = SPEEDS[current_zoom]
-            MAX_MOVING_TIME = 0.05 # 0.1 for 100 ms
-            d = max(abs(x_to), abs(y_to))
-            t_sec = d / SPEED
+        d = max(abs(x_to), abs(y_to))
+        t_sec = d/SPEED  # 소요 시간
 
-            do_not_move_conditions = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        MOVING_TIME = 0.05 # 0.1 for 100 ms
 
-            if t_sec > MAX_MOVING_TIME * 3:
-                x_to = int(x_to * (MAX_MOVING_TIME / t_sec))
-                y_to = int(y_to * (MAX_MOVING_TIME / t_sec))
-                t_sec = MAX_MOVING_TIME
-            else:
-                if x_to > do_not_move_conditions[current_zoom] or x_to < -do_not_move_conditions[current_zoom]:
-                    x_to = int(x_to / 10)
-                else:
-                    x_to = 0
-
-                if y_to > do_not_move_conditions[current_zoom] or y_to < -do_not_move_conditions[current_zoom]:
-                    y_to = int(y_to / 10)
-                else:
-                    y_to = 0
-
-            if y_to == 0 and x_to == 0:
-                t_sec = 0
-
+        if t_sec > MOVING_TIME:
+            print('l')
             self.move(x = x_to, y = y_to, z = z_to, f = f_to, t = t_sec)
 
-            if t_sec > 0:
-                self.is_moving = True
-                motor_timer = Timer(t_sec, self.has_finished_moving, args = [False])
-                motor_timer.start()
+            self.is_moving = True
+            motor_timer = Timer(t_sec*4, self.has_finished_moving, args = [False])
+            motor_timer.start()
+        else:
+            print('s')
+            x_to = int(x_to / 10)
+            y_to = int(y_to / 10)
+            self.move(x = x_to, y = y_to, z = z_to, f = f_to, t = t_sec)
+
+            self.is_moving = True
+            motor_timer = Timer(t_sec*1.1, self.has_finished_moving, args = [False])
+            motor_timer.start()
+
+    def track(self, center_to_x, center_to_y, current_zoom=1):
+        (x_to, y_to, z_to, f_to) = self.pixel_to_pulse(center_to_x, center_to_y, current_zoom, limit = True)
+
+        # SPEED = 12000 # full speed: 120000, half speed: 600000
+        SPEEDS = list(map(lambda idx: int(60000 * self.FOVS[idx-1][0]/self.FOVS[0][0]), list(range(0,21))))
+        # SPEEDS = [60000, 60000, 30000, 0, 30000, 0, 0, 0, 15000, 0, 0, 0, 10000, 0, 0, 0, 7500, 0, 0, 0, 6000]
+        # print(SPEEDS)
+        SPEED = SPEEDS[current_zoom]
+        d = max(abs(x_to), abs(y_to))
+        t_sec = d / SPEED # 소요 시간
+
+        MOVING_TIME = 0.05 # 0.1 for 100 ms
+        do_not_move_conditions = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+        if t_sec > MOVING_TIME * 3:
+            x_to = int(x_to * (MOVING_TIME / t_sec))
+            y_to = int(y_to * (MOVING_TIME / t_sec))
+            t_sec = MOVING_TIME
+        else:
+            # if x_to > do_not_move_conditions[current_zoom] or x_to < -do_not_move_conditions[current_zoom]:
+            #     x_to = int(x_to / 10)
+            # else:
+            x_to = 0
+
+            # if y_to > do_not_move_conditions[current_zoom] or y_to < -do_not_move_conditions[current_zoom]:
+            #     y_to = int(y_to / 10)
+            # else:
+            y_to = 0
+
+        if y_to != 0 or x_to != 0:
+            self.move(x = x_to, y = y_to, z = z_to, f = f_to, t = t_sec)
+            self.is_moving = True
+            motor_timer = Timer(t_sec, self.has_finished_moving, args = [False])
+            motor_timer.start()
 
     def has_finished_zooming(self, zoom):
         # zoom.stop_zooming()
         self.is_zooming = False
         self.current_zoom = zoom
-        # print("[ZOOM] End of Zooming")
+        print("[ZOOM] End of Zooming")
 
     def zoom_x1(self):
         # print('[ZOOM] to x1')
@@ -204,9 +229,8 @@ class Motor:
 
     def zoom_to(self, x, dur=0.1):
         # print('[ZOOM] to', x)
-        zoom_to_preset = {1: 1, 2: 2, 4: 3, 8: 4, 16: 5} # zoom to preset
+        preset = self.zoom_to_preset[x]
         # print('[Debug] x = ', x)
-        preset = zoom_to_preset[x]
 
         buffer = [0xff,0x01,0x00,0x07,0x00,preset,0x00]
         checksum = 0
@@ -281,7 +305,7 @@ class Motor:
 
         return next_zoom
 
-    def find_next_auto_zoom(self, target_length):
+    def find_next_auto_zoom(self, current_length):
         idx = self.available_zooms.index(self.current_zoom)
         zoom_in_idx = idx + 1 if idx < len(self.available_zooms) - 1 else len(self.available_zooms) - 1
         zoom_out_idx = idx - 1 if idx > 0 else 0
@@ -289,14 +313,14 @@ class Motor:
         normalized_length = list(map(lambda idx: self.FOVS[0][0]/self.FOVS[idx-1][0], self.available_zooms))
         # print("[ZOOM] Ratio in length", list(map(lambda i: round(i, 2), normalized_length)))
 
-        zoom_in_length = target_length * (normalized_length[zoom_in_idx]/normalized_length[idx])
-        zoom_out_length = target_length * (normalized_length[zoom_out_idx]/normalized_length[idx])
-        max_length = self.WIDTH * 0.3
-        # print("[ZOOM] Current: {:02.0f}, Zoom in: {:02.0f}, Zoom out: {:02.0f}".format(target_length, zoom_in_length, zoom_out_length))
+        zoom_in_length = current_length * (normalized_length[zoom_in_idx]/normalized_length[idx])
+        zoom_out_length = current_length * (normalized_length[zoom_out_idx]/normalized_length[idx])
+        max_length = self.WIDTH * self.scale
+        # print("[ZOOM] Current: {0:.0f}/{3}, Zoom in: {1:.0f}/{3}, Zoom out: {2:.0f}/{3}".format(current_length, zoom_in_length, zoom_out_length, self.WIDTH))
 
-        if target_length >= max_length + 20:
+        if current_length >= max_length * 1.4:
             next_zoom = self.available_zooms[zoom_out_idx]
-        elif target_length > 0 and zoom_in_length < max_length: # 줌인할 길이가 상한을 넘지 않은 경우에는 줌인
+        elif current_length > 0 and zoom_in_length < max_length * 1.2: # 줌인할 길이가 상한을 넘지 않은 경우에는 줌인
             next_zoom = self.available_zooms[zoom_in_idx]
         else:
             next_zoom = self.current_zoom
