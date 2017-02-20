@@ -6,7 +6,7 @@ PY3 = sys.version_info[0] == 3
 if PY3:
   xrange = range
 
-from trackers.kcf_tracker import fhog
+from . import fhog
 
 # ffttools
 def fftd(img, backwards=False):

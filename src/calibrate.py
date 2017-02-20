@@ -207,8 +207,8 @@ while True:
                 elif args['serial'] and motor_is_moving_flag is not True and zoom_is_moving_flag is not True:
                     centerX = (tracking_window['x1'] + tracking_window['x2']) // 2
                     centerY = (tracking_window['y1'] + tracking_window['y2']) // 2
-                    center_to_x = HALF_WIDTH - centerX
-                    center_to_y = centerY - HALF_HEIGHT
+                    center_to_x = centerX - HALF_WIDTH
+                    center_to_y = HALF_HEIGHT - centerY # new controller 2월 1일
 
                     motor_timer = Timer(1, motor_has_finished_moving, args = [False])
                     (x_to, y_to, z_to, f_to) = motor.pixel_to_pulse(center_to_x, center_to_y, current_zoom, limit = False)

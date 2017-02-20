@@ -3,6 +3,8 @@ import serial
 import time
 from threading import Timer
 import math
+import datetime
+import time
 
 class Motor:
     TABLE = [0,  94, 188, 226,  97,  63, 221, 131, 194, 156, 126,  32, 163, 253,  31,  65,
@@ -40,9 +42,19 @@ class Motor:
         self.HALF_HEIGHT = self.HEIGHT // 2
         self.scale = 0.3
 
-        self.DEGREE_PER_PULSE = 0.00048 # 0.00048은 현재 사용 모터와 기어비로 결정되는 펄스 당 회전 각도 (degree)
+        self.right_limit = 90
+        self.left_limit = -90
+        self.up_limit = 90
+        self.down_limit = -90
 
-        # FOVS 는 실제로는 Half FOVS를 표현
+        self.DEGREE_PER_PULSE = 0.00048 # 0.00048은 현재 사용 모터와 기어비로 결정되는 펄스 당 회전 각도 (degree)
+        self.MANUAL_MOVING_TIME = 1 # 1 sec for default
+
+        self.prev_distance = 0
+        self.tic = time.time()
+        toc = time.time()
+
+        # 주의: FOVS 변수는 실제는 Half FOVS 값을 가지고 있음
         self.FOVS = [(62.5000/2, 34.5000/2), #1
                     (62.5000/4, 34.5000/4), #2
                     (0, 0),
@@ -66,7 +78,8 @@ class Motor:
 
     def has_finished_moving(self, args):
         self.is_moving = False
-        # print("[MOTOR] End of Moving")
+        # current_time = datetime.datetime.now().time().isoformat()
+        # print("[MOTOR] End of Moving: {}".format(current_time)) # hl1sqi
 
     def send_packet(self, buffer):
         crc8 = self.crc8_calc(buffer[2:-1])
@@ -92,15 +105,28 @@ class Motor:
         t = int(t * 1000000) # sec to us
         # print("[MOTOR] Move: x: {} y: {} t: {} rel: {}".format(x, y, t, rel))
 
-        if (self.sum_of_x_degree > 90 and x > 0) or (self.sum_of_x_degree < -90 and x < 0):
-            x = 0
-        else:
-            self.sum_of_x_degree += (x * self.DEGREE_PER_PULSE)
+        sum_of_x_degree = self.sum_of_x_degree + (x * self.DEGREE_PER_PULSE)
+        sum_of_y_degree = self.sum_of_y_degree + (y * self.DEGREE_PER_PULSE)
 
-        if (self.sum_of_y_degree > 90 and y > 0) or (self.sum_of_y_degree < -90 and y < 0):
-            y = 0
-        else:
-            self.sum_of_y_degree += (y * self.DEGREE_PER_PULSE)
+        if sum_of_x_degree > self.right_limit:
+            x = int((self.right_limit - self.sum_of_x_degree) / self.DEGREE_PER_PULSE)
+        elif sum_of_x_degree < self.left_limit:
+            x = int((self.left_limit - self.sum_of_x_degree) / self.DEGREE_PER_PULSE)
+
+        if sum_of_y_degree > self.up_limit:
+            y = int((self.up_limit - self.sum_of_y_degree) / self.DEGREE_PER_PULSE)
+        elif sum_of_y_degree < self.down_limit:
+            y = int((self.down_limit - self.sum_of_y_degree) / self.DEGREE_PER_PULSE)
+
+        # if (self.sum_of_x_degree > self.right_limit and x > 0) or (self.sum_of_x_degree < self.left_limit and x < 0):
+        #     x = 0
+        # else:
+        self.sum_of_x_degree += (x * self.DEGREE_PER_PULSE)
+
+        # if (self.sum_of_y_degree > self.up_limit and y > 0) or (self.sum_of_y_degree < self.down_limit and y < 0):
+        #     y = 0
+        # else:
+        self.sum_of_y_degree += (y * self.DEGREE_PER_PULSE)
 
         encoded = list(struct.pack("3i", *[x, y, t]))
 
@@ -120,6 +146,15 @@ class Motor:
 
         self.send_packet(buffer)
 
+    def pulse_to_pixel(self, x_pulse, y_pulse, zoom = 1):
+        x_degree = x_pulse * self.DEGREE_PER_PULSE
+        y_degree = y_pulse * self.DEGREE_PER_PULSE
+
+        x_px = round(x_degree * self.HALF_WIDTH / self.FOVS[zoom-1][0])
+        y_px = round(y_degree * self.HALF_HEIGHT / self.FOVS[zoom-1][1])
+
+        return x_px, y_px
+
     def pixel_to_pulse(self, x_px, y_px, zoom = 1, limit = False):
         # Logitec
         # x_degree = x_px/320 * 66.59215896/2
@@ -132,8 +167,8 @@ class Motor:
         x_degree = x_px/self.HALF_WIDTH * self.FOVS[zoom-1][0]
         y_degree = y_px/self.HALF_HEIGHT * self.FOVS[zoom-1][1]
 
-        x = int(x_degree/self.DEGREE_PER_PULSE)
-        y = int(y_degree/self.DEGREE_PER_PULSE)
+        x = round(x_degree/self.DEGREE_PER_PULSE)
+        y = round(y_degree/self.DEGREE_PER_PULSE)
         z = f = 0
 
         # print("[MOTOR] ({}px, {}px) => ({:.4f}°, {:.4f}°) => ({}, {}) pulse".format(x_px, y_px, x_degree, y_degree, x, y))
@@ -141,79 +176,171 @@ class Motor:
 
     def move_to(self, x, y, current_zoom=1):
         (x_to, y_to, z_to, f_to) = self.pixel_to_pulse(x, y, current_zoom, limit = False)
-        t_sec = 1
-        self.move(x = x_to, y = y_to, z = z_to, f = f_to, t = t_sec)
-        motor_timer = Timer(t_sec * 2, self.has_finished_moving, args = [False])
+        self.move(x = x_to, y = y_to, z = z_to, f = f_to, t = self.MANUAL_MOVING_TIME)
+
+        # hl1sqi
+        # motor_timer = Timer(self.MANUAL_MOVING_TIME * 2, self.has_finished_moving, args = [False])
+        motor_timer = Timer(self.MANUAL_MOVING_TIME, self.has_finished_moving, args = [False])
+
         motor_timer.start()
         self.is_moving = True
-
-    def track1(self, center_to_x, center_to_y, current_zoom=1):
-        (x_to, y_to, z_to, f_to) = self.pixel_to_pulse(center_to_x, center_to_y, current_zoom, limit = True)
-        SPEEDS = list(map(lambda idx: int(60000 * self.FOVS[idx-1][0]/self.FOVS[0][0]), list(range(0,21))))
-        SPEED = SPEEDS[current_zoom]
-
-        d = max(abs(x_to), abs(y_to))
-        t_sec = d/SPEED  # 소요 시간
-
-        MOVING_TIME = 0.05 # 0.1 for 100 ms
-
-        if t_sec > MOVING_TIME:
-            print('l')
-            self.move(x = x_to, y = y_to, z = z_to, f = f_to, t = t_sec)
-
-            self.is_moving = True
-            motor_timer = Timer(t_sec*4, self.has_finished_moving, args = [False])
-            motor_timer.start()
-        else:
-            print('s')
-            x_to = int(x_to / 10)
-            y_to = int(y_to / 10)
-            self.move(x = x_to, y = y_to, z = z_to, f = f_to, t = t_sec)
-
-            self.is_moving = True
-            motor_timer = Timer(t_sec*1.1, self.has_finished_moving, args = [False])
-            motor_timer.start()
+        # current_time = datetime.datetime.now().time().isoformat()
+        # print("[MOTOR] Start of Moving: {}".format(current_time)) # hl1sqi
 
     def track(self, center_to_x, center_to_y, current_zoom=1):
-        (x_to, y_to, z_to, f_to) = self.pixel_to_pulse(center_to_x, center_to_y, current_zoom, limit = True)
+        toc = time.time()
+        lap = (toc - self.tic) * 1000
+        # print("{:04.0f} ms".format(lap))
+        self.tic = toc
 
+        # Case 1
         # SPEED = 12000 # full speed: 120000, half speed: 600000
-        SPEEDS = list(map(lambda idx: int(60000 * self.FOVS[idx-1][0]/self.FOVS[0][0]), list(range(0,21))))
-        # SPEEDS = [60000, 60000, 30000, 0, 30000, 0, 0, 0, 15000, 0, 0, 0, 10000, 0, 0, 0, 7500, 0, 0, 0, 6000]
-        # print(SPEEDS)
+        # SPEEDS = list(map(lambda idx: int(30000 * self.FOVS[idx-1][0]/self.FOVS[0][0]), list(range(0,21))))
+        # [30000, 30000, 15000, 0, 7500, 0, 0, 0, 3750, 0, 0, 0, 2500, 0, 0, 0, 1875, 0, 0, 0, 1500]
+        SPEEDS = [0, 30000, 30000, 0, 30000, 0, 0, 0, 30000, 0, 0, 0, 0, 0, 0, 0, 15000, 0, 0, 0, 0]
         SPEED = SPEEDS[current_zoom]
-        d = max(abs(x_to), abs(y_to))
-        t_sec = d / SPEED # 소요 시간
+        # SPEED = 30000
 
-        MOVING_TIME = 0.05 # 0.1 for 100 ms
-        do_not_move_conditions = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        (x_pulse, y_pulse, z_pulse, f_pulse) = self.pixel_to_pulse(center_to_x, center_to_y, current_zoom, limit = True)
+        d_pulse = max(abs(x_pulse), abs(y_pulse))
+        t_sec = d_pulse / SPEED # 소요 시간
+        # print("[MOTOR] ({}px, {}px) => ({}, {}) pulse in {:.0f} ms @{:04.0f}".format(center_to_x, center_to_y, x_pulse, y_pulse, t_sec*1000, lap))
 
-        if t_sec > MOVING_TIME * 3:
-            x_to = int(x_to * (MOVING_TIME / t_sec))
-            y_to = int(y_to * (MOVING_TIME / t_sec))
+
+        MIN_DISTANCES = [0, 10, 20, 0, 30, 0, 0, 0, 60, 0, 0, 0, 0, 0, 0, 0, 60, 0, 0, 0, 0]
+        MIN_DISTANCE = MIN_DISTANCES[current_zoom]
+
+        MIN_MOVING_DISTANCES = [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0]
+        MIN_MOVING_DISTANCE = MIN_MOVING_DISTANCES[current_zoom]
+
+        MOVING_TIME = 0.017 # 0.1 for 100 ms
+
+        if t_sec >= MOVING_TIME: # and t_sec > 0:
+            x_pulse = int(x_pulse * (MOVING_TIME / t_sec))
+            y_pulse = int(y_pulse * (MOVING_TIME / t_sec))
+            x_px, y_px = self.pulse_to_pixel(x_pulse, y_pulse, current_zoom)
             t_sec = MOVING_TIME
-        else:
-            # if x_to > do_not_move_conditions[current_zoom] or x_to < -do_not_move_conditions[current_zoom]:
-            #     x_to = int(x_to / 10)
-            # else:
-            x_to = 0
 
-            # if y_to > do_not_move_conditions[current_zoom] or y_to < -do_not_move_conditions[current_zoom]:
-            #     y_to = int(y_to / 10)
-            # else:
-            y_to = 0
+            distance = math.sqrt(center_to_x**2 + center_to_y**2)
+            # print("[MOTOR] Distance from Center: ({}px, {}px) => {:.0f}".format(center_to_x, center_to_y, distance))
 
-        if y_to != 0 or x_to != 0:
-            self.move(x = x_to, y = y_to, z = z_to, f = f_to, t = t_sec)
-            self.is_moving = True
-            motor_timer = Timer(t_sec, self.has_finished_moving, args = [False])
-            motor_timer.start()
+            if abs(distance - self.prev_distance) > MIN_MOVING_DISTANCE and distance > MIN_DISTANCE:
+                # print("[MOTOR: DO] ({}px, {}px) => ({:.0f}px, {:.0f}px) => ({}, {}) pulse in {:.0f} ms".format(center_to_x, center_to_y, x_px, y_px, x_pulse, y_pulse, t_sec*1000))
+                self.prev_distance = distance
+                self.move(x = x_pulse, y = y_pulse, z = z_pulse, f = f_pulse, t = t_sec)
+            # else:
+            #     print("[MOTOR: DON'T] ({}px, {}px) => ({:.0f}px, {:.0f}px) => ({}, {}) pulse in {:.0f} ms".format(center_to_x, center_to_y, x_px, y_px, x_pulse, y_pulse, t_sec*1000))
+
+        # Case 2
+        # # SPEED = 12000 # full speed: 120000, half speed: 600000
+        # # SPEEDS = list(map(lambda idx: int(30000 * self.FOVS[idx-1][0]/self.FOVS[0][0]), list(range(0,21))))
+        # # [30000, 30000, 15000, 0, 7500, 0, 0, 0, 3750, 0, 0, 0, 2500, 0, 0, 0, 1875, 0, 0, 0, 1500]
+        # SPEEDS = [0, 30000, 30000, 0, 30000, 0, 0, 0, 12000, 0, 0, 0, 0, 0, 0, 0, 6000, 0, 0, 0, 0]
+        # SPEED = SPEEDS[current_zoom]
+        # # SPEED = 30000
+        #
+        # (x_pulse, y_pulse, z_pulse, f_pulse) = self.pixel_to_pulse(center_to_x, center_to_y, current_zoom, limit = True)
+        # d_pulse = max(abs(x_pulse), abs(y_pulse))
+        # t_sec = d_pulse / SPEED # 소요 시간
+        # # print("[MOTOR] ({}px, {}px) => ({}, {}) pulse in {:.0f} ms @{:04.0f}".format(center_to_x, center_to_y, x_pulse, y_pulse, t_sec*1000, lap))
+        #
+        # MIN_DISTANCES = [0, 10, 20, 0, 30, 0, 0, 0, 60, 0, 0, 0, 0, 0, 0, 0, 60, 0, 0, 0, 0]
+        # MIN_DISTANCE = MIN_DISTANCES[current_zoom]
+        #
+        # MIN_MOVING_DISTANCES = [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0]
+        # MIN_MOVING_DISTANCE = MIN_MOVING_DISTANCES[current_zoom]
+        #
+        # MOVING_TIME = 0.1 # 0.1 for 100 ms
+        #
+        # if t_sec >= MOVING_TIME:
+        #     x_pulse = int(x_pulse * (MOVING_TIME / t_sec))
+        #     y_pulse = int(y_pulse * (MOVING_TIME / t_sec))
+        #     t_sec = MOVING_TIME
+        # elif t_sec >= MOVING_TIME/2:
+        #     x_pulse = int(x_pulse * (MOVING_TIME/2 / t_sec))
+        #     y_pulse = int(y_pulse * (MOVING_TIME/2 / t_sec))
+        #     t_sec = MOVING_TIME
+        # else:
+        #     t_sec = 0
+        #     x_pulse = 0
+        #     y_pulse = 0
+        #
+        # x_px, y_px = self.pulse_to_pixel(x_pulse, y_pulse, current_zoom)
+        # distance = math.sqrt(center_to_x**2 + center_to_y**2)
+        # # print("[MOTOR] Distance from Center: ({}px, {}px) => {:.0f}".format(center_to_x, center_to_y, distance))
+        #
+        # if t_sec > 0 and abs(distance - self.prev_distance) > MIN_MOVING_DISTANCE: # and distance > MIN_DISTANCE:
+        #     # print("[MOTOR: DO] ({}px, {}px) => ({:.0f}px, {:.0f}px) => ({}, {}) pulse in {:.0f} ms".format(center_to_x, center_to_y, x_px, y_px, x_pulse, y_pulse, t_sec*1000))
+        #     self.prev_distance = distance
+        #     self.move(x = x_pulse, y = y_pulse, z = z_pulse, f = f_pulse, t = t_sec)
+        #     self.is_moving = True
+        #     motor_timer = Timer(t_sec*1.2, self.has_finished_moving, args = [False])
+        #     motor_timer.start()
+        # # else:
+        # #     print("[MOTOR: DON'T] ({}px, {}px) => ({:.0f}px, {:.0f}px) => ({}, {}) pulse in {:.0f} ms".format(center_to_x, center_to_y, x_px, y_px, x_pulse, y_pulse, t_sec*1000))
+
+        # Case 3
+        # SPEEDS = [0, 30000, 30000, 0, 30000, 0, 0, 0, 15000, 0, 0, 0, 0, 0, 0, 0, 15000, 0, 0, 0, 0]
+        # SPEED = SPEEDS[current_zoom]
+        # # SPEED = 30000
+        #
+        # MIN_DISTANCES = [0, 10, 20, 0, 20, 0, 0, 0, 60, 0, 0, 0, 0, 0, 0, 0, 60, 0, 0, 0, 0]
+        # MIN_DISTANCE = MIN_DISTANCES[current_zoom]
+        #
+        # MIN_MOVING_DISTANCES = [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0]
+        # MIN_MOVING_DISTANCE = MIN_MOVING_DISTANCES[current_zoom]
+        #
+        # (x_pulse, y_pulse, z_pulse, f_pulse) = self.pixel_to_pulse(center_to_x, center_to_y, current_zoom, limit = True)
+        # d_pulse = max(abs(x_pulse), abs(y_pulse))
+        # t_sec = d_pulse / SPEED # 소요 시간
+        #
+        # distance = math.sqrt(center_to_x**2 + center_to_y**2)
+        #
+        # # print("[MOTOR] ({}px, {}px) => ({}, {}) pulse in {:.0f} ms @{:04.0f}".format(center_to_x, center_to_y, x_pulse, y_pulse, t_sec*1000, lap))
+        # if t_sec > 0.05 and abs(distance - self.prev_distance) > MIN_MOVING_DISTANCE and distance > MIN_DISTANCE:
+        #     self.prev_distance = distance
+        #     self.move(x = x_pulse, y = y_pulse, z = z_pulse, f = f_pulse, t = t_sec)
+        #     self.is_moving = True
+        #     motor_timer = Timer(t_sec*1.2, self.has_finished_moving, args = [False])
+        #     motor_timer.start()
+
+        # Case 4
+        # # SPEEDS = [0, 30000, 30000, 0, 30000, 0, 0, 0, 15000, 0, 0, 0, 0, 0, 0, 0, 15000, 0, 0, 0, 0]
+        # # SPEED = SPEEDS[current_zoom]
+        # SPEED = 30000
+        # MOVING_TIME = 0.05
+        # (x_pulse, y_pulse, z_pulse, f_pulse) = self.pixel_to_pulse(center_to_x, center_to_y, current_zoom, limit = True)
+        # d_pulse = max(abs(x_pulse), abs(y_pulse))
+        # t_sec = d_pulse / SPEED # 소요 시간
+        # # print("[MOTOR] ({}px, {}px) => ({}, {}) pulse in {:.0f} ms @{:04.0f}".format(center_to_x, center_to_y, x_pulse, y_pulse, t_sec*1000, lap))
+        #
+        #
+        # if t_sec > MOVING_TIME * 3:
+        #     x_pulse = int(x_pulse * (MOVING_TIME / t_sec))
+        #     y_pulse = int(y_pulse * (MOVING_TIME / t_sec))
+        #     t_sec = MOVING_TIME
+        # else:
+        #     # if x_pulse > do_not_move_conditions[current_zoom] or x_pulse < -do_not_move_conditions[current_zoom]:
+        #     #     x_pulse = int(x_pulse / 10)
+        #     # else:
+        #     x_pulse = 0
+        #
+        #     # if y_pulse > do_not_move_conditions[current_zoom] or y_pulse < -do_not_move_conditions[current_zoom]:
+        #     #     y_pulse = int(y_pulse / 10)
+        #     # else:
+        #     y_pulse = 0
+        #
+        # if y_pulse != 0 or x_pulse != 0:
+        #     self.move(x = x_pulse, y = y_pulse, z = z_pulse, f = f_pulse, t = t_sec)
+        #     self.is_moving = True
+        #     motor_timer = Timer(t_sec*2, self.has_finished_moving, args = [False])
+        #     motor_timer.start()
 
     def has_finished_zooming(self, zoom):
         # zoom.stop_zooming()
         self.is_zooming = False
         self.current_zoom = zoom
-        print("[ZOOM] End of Zooming")
+        print("[ZOOM] End of Zooming") # hl1sqi
 
     def zoom_x1(self):
         # print('[ZOOM] to x1')
@@ -230,7 +357,7 @@ class Motor:
     def zoom_to(self, x, dur=0.1):
         # print('[ZOOM] to', x)
         preset = self.zoom_to_preset[x]
-        # print('[Debug] x = ', x)
+        print('[Debug] x = ', x)
 
         buffer = [0xff,0x01,0x00,0x07,0x00,preset,0x00]
         checksum = 0
