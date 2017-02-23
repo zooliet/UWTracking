@@ -199,7 +199,7 @@ class Motor:
         # SPEED = 12000 # full speed: 120000, half speed: 600000
         # SPEEDS = list(map(lambda idx: int(30000 * self.FOVS[idx-1][0]/self.FOVS[0][0]), list(range(0,21))))
         # [30000, 30000, 15000, 0, 7500, 0, 0, 0, 3750, 0, 0, 0, 2500, 0, 0, 0, 1875, 0, 0, 0, 1500]
-        SPEEDS = [0, 30000, 30000, 0, 30000, 0, 0, 0, 30000, 0, 0, 0, 0, 0, 0, 0, 15000, 0, 0, 0, 0]
+        SPEEDS = [0, 30000, 30000, 0, 30000, 0, 0, 0, 30000, 0, 0, 0, 0, 0, 15000, 0, 15000, 0, 0, 0, 0]
         SPEED = SPEEDS[current_zoom]
         # SPEED = 30000
 
@@ -209,10 +209,10 @@ class Motor:
         # print("[MOTOR] ({}px, {}px) => ({}, {}) pulse in {:.0f} ms @{:04.0f}".format(center_to_x, center_to_y, x_pulse, y_pulse, t_sec*1000, lap))
 
 
-        MIN_DISTANCES = [0, 10, 20, 0, 30, 0, 0, 0, 60, 0, 0, 0, 0, 0, 0, 0, 60, 0, 0, 0, 0]
+        MIN_DISTANCES = [0, 10, 20, 0, 30, 0, 0, 0, 60, 0, 0, 0, 0, 0, 60, 0, 60, 0, 0, 0, 0]
         MIN_DISTANCE = MIN_DISTANCES[current_zoom]
 
-        MIN_MOVING_DISTANCES = [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0]
+        MIN_MOVING_DISTANCES = [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0]
         MIN_MOVING_DISTANCE = MIN_MOVING_DISTANCES[current_zoom]
 
         MOVING_TIME = 0.017 # 0.1 for 100 ms
@@ -237,7 +237,7 @@ class Motor:
         # # SPEED = 12000 # full speed: 120000, half speed: 600000
         # # SPEEDS = list(map(lambda idx: int(30000 * self.FOVS[idx-1][0]/self.FOVS[0][0]), list(range(0,21))))
         # # [30000, 30000, 15000, 0, 7500, 0, 0, 0, 3750, 0, 0, 0, 2500, 0, 0, 0, 1875, 0, 0, 0, 1500]
-        # SPEEDS = [0, 30000, 30000, 0, 30000, 0, 0, 0, 12000, 0, 0, 0, 0, 0, 0, 0, 6000, 0, 0, 0, 0]
+        # SPEEDS = [0, 30000, 30000, 0, 30000, 0, 0, 0, 12000, 0, 0, 0, 0, 0, 6000, 0, 6000, 0, 0, 0, 0]
         # SPEED = SPEEDS[current_zoom]
         # # SPEED = 30000
         #
@@ -246,10 +246,10 @@ class Motor:
         # t_sec = d_pulse / SPEED # 소요 시간
         # # print("[MOTOR] ({}px, {}px) => ({}, {}) pulse in {:.0f} ms @{:04.0f}".format(center_to_x, center_to_y, x_pulse, y_pulse, t_sec*1000, lap))
         #
-        # MIN_DISTANCES = [0, 10, 20, 0, 30, 0, 0, 0, 60, 0, 0, 0, 0, 0, 0, 0, 60, 0, 0, 0, 0]
+        # MIN_DISTANCES = [0, 10, 20, 0, 30, 0, 0, 0, 60, 0, 0, 0, 0, 0, 60, 0, 60, 0, 0, 0, 0]
         # MIN_DISTANCE = MIN_DISTANCES[current_zoom]
         #
-        # MIN_MOVING_DISTANCES = [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0]
+        # MIN_MOVING_DISTANCES = [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0]
         # MIN_MOVING_DISTANCE = MIN_MOVING_DISTANCES[current_zoom]
         #
         # MOVING_TIME = 0.1 # 0.1 for 100 ms
@@ -282,14 +282,14 @@ class Motor:
         # #     print("[MOTOR: DON'T] ({}px, {}px) => ({:.0f}px, {:.0f}px) => ({}, {}) pulse in {:.0f} ms".format(center_to_x, center_to_y, x_px, y_px, x_pulse, y_pulse, t_sec*1000))
 
         # Case 3
-        # SPEEDS = [0, 30000, 30000, 0, 30000, 0, 0, 0, 15000, 0, 0, 0, 0, 0, 0, 0, 15000, 0, 0, 0, 0]
+        # SPEEDS = [0, 30000, 30000, 0, 30000, 0, 0, 0, 15000, 0, 0, 0, 0, 0, 15000, 0, 15000, 0, 0, 0, 0]
         # SPEED = SPEEDS[current_zoom]
         # # SPEED = 30000
         #
-        # MIN_DISTANCES = [0, 10, 20, 0, 20, 0, 0, 0, 60, 0, 0, 0, 0, 0, 0, 0, 60, 0, 0, 0, 0]
+        # MIN_DISTANCES = [0, 10, 20, 0, 20, 0, 0, 0, 60, 0, 0, 0, 0, 0, 60, 0, 60, 0, 0, 0, 0]
         # MIN_DISTANCE = MIN_DISTANCES[current_zoom]
         #
-        # MIN_MOVING_DISTANCES = [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0]
+        # MIN_MOVING_DISTANCES = [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0]
         # MIN_MOVING_DISTANCE = MIN_MOVING_DISTANCES[current_zoom]
         #
         # (x_pulse, y_pulse, z_pulse, f_pulse) = self.pixel_to_pulse(center_to_x, center_to_y, current_zoom, limit = True)
@@ -307,7 +307,7 @@ class Motor:
         #     motor_timer.start()
 
         # Case 4
-        # # SPEEDS = [0, 30000, 30000, 0, 30000, 0, 0, 0, 15000, 0, 0, 0, 0, 0, 0, 0, 15000, 0, 0, 0, 0]
+        # # SPEEDS = [0, 30000, 30000, 0, 30000, 0, 0, 0, 15000, 0, 0, 0, 0, 0, 15000, 0, 15000, 0, 0, 0, 0]
         # # SPEED = SPEEDS[current_zoom]
         # SPEED = 30000
         # MOVING_TIME = 0.05

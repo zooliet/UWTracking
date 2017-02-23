@@ -419,6 +419,16 @@ while True:
                         dlib_tracker.y2 = y2
                         dlib_tracker.center = ((dlib_tracker.x1 + dlib_tracker.x2) // 2, (dlib_tracker.y1 + dlib_tracker.y2) // 2)
 
+                        dlib_tracker.prev_widths = np.append(dlib_tracker.prev_widths, x2-x1)
+                        dlib_tracker.prev_heights = np.append(dlib_tracker.prev_heights, y2-y1)
+
+                        if dlib_tracker.prev_widths.shape[0] > dlib_tracker.PREV_HISTORY_SIZE: # 10
+                            dlib_tracker.prev_widths = np.delete(dlib_tracker.prev_widths, (0), axis=0)
+                            dlib_tracker.prev_heights = np.delete(dlib_tracker.prev_heights, (0), axis=0)
+
+                        dlib_tracker.mean_width = np.round(np.mean(dlib_tracker.prev_widths)).astype(np.int)
+                        dlib_tracker.mean_height = np.round(np.mean(dlib_tracker.prev_heights)).astype(np.int)
+
                         cv2.rectangle(frame_draw,(dlib_tracker.x1,dlib_tracker.y1), (dlib_tracker.x2,dlib_tracker.y2), (0,255,0), 1)
                         cv2.drawMarker(frame_draw, tuple(dlib_tracker.center), (0,255,0))
                 else: # dlib_tracker.enable is False
@@ -433,11 +443,6 @@ while True:
                     if cmt_tracker.num_initial_keypoints == 0:
                         print('[CMT] No keypoints found in selection for ({},{}), ({},{})'.format(cmt_tracker.x1, cmt_tracker.y1, cmt_tracker.x2, cmt_tracker.y2))
                         cmt_tracker.force_init_flag = True
-                        if kcf_tracker:
-                            cmt_tracker.x1 = kcf_tracker.x1
-                            cmt_tracker.x2 = kcf_tracker.x2
-                            cmt_tracker.y1 = kcf_tracker.y1
-                            cmt_tracker.y2 = kcf_tracker.y2
                     # else:
                     #     print("[CMT] num_selected_keypoints is {}".format(cmt_tracker.num_initial_keypoints))
 
@@ -527,8 +532,9 @@ while True:
 
 
             if (kcf_tracker and kcf_tracker.enable) or (dlib_tracker and dlib_tracker.enable):
+                mean_width = kcf_tracker.mean_width if kcf_tracker else dlib_tracker.mean_width
                 if autozoom_flag and zoom.is_zooming is False: # and motor.is_moving is False:
-                    next_zoom = zoom.find_next_auto_zoom(current_length = kcf_tracker.mean_width)
+                    next_zoom = zoom.find_next_auto_zoom(current_length = mean_width)
                     if next_zoom != zoom.current_zoom:
                         # print("[ZOOM] {} to {}".format(zoom.current_zoom, next_zoom))
                         zoom.zoom_to(next_zoom, dur=2) # hl1sqi dur => 0.1 ?
@@ -741,6 +747,10 @@ while True:
                 redis_agent.autozoom = False
                 if zoom_flag:
                     autozoom_flag = True if redis_agent.autozoom_enable else False
+            elif redis_agent.target_scale:
+                redis_agent.target_scale = False
+                if zoom_flag:
+                    zoom.scale = redis_agent.target_scale_value
 
             elif redis_agent.pause:
                 redis_agent.pause = False

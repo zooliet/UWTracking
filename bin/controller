@@ -1,4 +1,4 @@
 #!/bin/bash
 
 BINPATH=`dirname $0`
-python "$BINPATH/../src/gui_controller.py" $@
+/home/uwtec/.pyenv/shims/python "$BINPATH/../src/gui_controller.py"

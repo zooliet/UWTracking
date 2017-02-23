@@ -18,6 +18,8 @@ class RedisAgent(threading.Thread):
         self.zoom_out = False
         self.zoom_x1 = False
         self.autozoom = False
+        self.target_scale = False
+        self.target_scale_value = 0
 
         self.pause = False
         self.play = False
@@ -59,6 +61,10 @@ class RedisAgent(threading.Thread):
                 self.autozoom_enable = True
             else:
                 self.autozoom_enable = False
+        elif j['action'] == 'target_scale':
+            self.target_scale = True
+            self.target_scale_value = int(j['value']) * 0.01
+
 
         elif j['action'] == 'pause':
             self.pause = True

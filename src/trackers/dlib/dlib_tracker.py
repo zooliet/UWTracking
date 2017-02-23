@@ -7,6 +7,8 @@ import dlib
 import itertools
 
 class DLIBTracker:
+    PREV_HISTORY_SIZE = 10
+    
     def __init__(self):
         self._tracker = dlib.correlation_tracker()
         self.detector = cv2.BRISK_create(10)
@@ -18,6 +20,13 @@ class DLIBTracker:
         self._tracker.start_track(frame, dlib.rectangle(self.x1, self.y1, self.x2, self.y2))
         self.force_init_flag = False
         self.enable = True
+
+        self.mean_width = self.x2 - self.x1
+        self.mean_height = self.y2 - self.y1
+
+        self.prev_widths = np.array([self.mean_width], dtype=np.int16)
+        self.prev_heights = np.array([self.mean_height], dtype=np.int16)
+
 
     def update(self, frame, options = None):
         if options is None:

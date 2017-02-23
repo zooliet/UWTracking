@@ -45,11 +45,13 @@ def autozoom(redis, channel, autozoom, event=None):
     jstr = json.dumps(j)
     redis.publish(channel, jstr)
 
+# def target_scale(redis, channel, scale, event=None):
 def target_scale(redis, channel, scale, event=None):
-    j = {'action': 'target_scale', 'value': scale}
+    value = scale.get()
+    j = {'action': 'target_scale', 'value': value}
     jstr = json.dumps(j)
-    print(jstr)
-    # redis.publish(channel, jstr)
+    # print(jstr)
+    redis.publish(channel, jstr)
 
 ################################################################################
 
@@ -69,7 +71,7 @@ def recording(redis, channel, button, event=None):
         j = {'action': 'start_recording'}
     else:
         button.config(background='#d9d9d9')
-        button.bind('<Enter>', lambda event, b=button: b.config(background='#d9d9d9'))
+        # button.bind('<Enter>', lambda event, b=button: b.config(background='#d9d9d9'))
         j = {'action': 'stop_recording'}
 
     jstr = json.dumps(j)

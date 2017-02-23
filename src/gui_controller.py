@@ -50,7 +50,10 @@ cam3.grid(row=0, column=2, sticky='news')
 
 ################################################################################
 
-stop_icon = PhotoImage(file='src/controller/icons/stop.png')
+cwd = os.getcwd()
+suffix = "" if cwd.split("/")[-1] == 'UWTracking' else "/usr/local/src/UWTracking/"
+# suffix = "" if cwd.split("/")[-1] == 'UWTracking' else "/home/uwtec/work/UWTracking/"
+stop_icon = PhotoImage(file='{}src/controller/icons/stop.png'.format(suffix))
 
 row = 2
 for cam, channel in zip([cam1, cam2, cam3], ['uwtec:front', 'uwtec:rear', 'uwtec:side']):
@@ -60,9 +63,9 @@ for cam, channel in zip([cam1, cam2, cam3], ['uwtec:front', 'uwtec:rear', 'uwtec
 
 ################################################################################
 
-zoom_in_icon = PhotoImage(file='src/controller/icons/zoom_in.png')
-zoom_out_icon = PhotoImage(file='src/controller/icons/zoom_out.png')
-zoom_wide_icon = PhotoImage(file='src/controller/icons/zoom_wide.png')
+zoom_in_icon = PhotoImage(file='{}src/controller/icons/zoom_in.png'.format(suffix))
+zoom_out_icon = PhotoImage(file='{}src/controller/icons/zoom_out.png'.format(suffix))
+zoom_wide_icon = PhotoImage(file='{}src/controller/icons/zoom_wide.png'.format(suffix))
 
 autozoom_1 = BooleanVar()
 autozoom_2 = BooleanVar()
@@ -76,17 +79,17 @@ for cam, channel, autozoom in zip([cam1, cam2, cam3], ['uwtec:front', 'uwtec:rea
     Button(cam, text='줌 아웃', image=zoom_out_icon, compound='left', command=lambda r=redis, c=channel: cb.zoom_out(r, c)).grid(row=row, column=2, sticky='ew')
     Button(cam, text='광각 줌', image=zoom_wide_icon, compound='left', command=lambda r=redis, c=channel: cb.zoom_x1(r, c)).grid(row=row, column=3, sticky='ew')
     autozoom.set(True)
-    Checkbutton(cam, text='자동 줌', variable=autozoom, command=lambda r=redis, c=channel, a=autozoom: cb.autozoom(r, c, a)).grid(row=row, column=4, sticky='ew')
-    # # Label(cam1, text='타겟 크기(%)').grid(row=2, column=5, sticky='e')
-    # target_scale1 = IntVar()
-    # target_scale1.set(25)
-    # Scale(cam1, from_=25, to=50, label='타겟 크기(%)', orient=HORIZONTAL, command=lambda target_scale1: cb.target_scale(redis=redis, channel='uwtec:front', scale=target_scale1)).grid(row=2, column=5, sticky='ew', pady=(15, 15))
-    # # Spinbox(cam1, values=(0.25, 0.3, 0.5)).grid(row=2, column=6, sticky='ew')
+    Checkbutton(cam, text='자동 줌(%)', variable=autozoom, command=lambda r=redis, c=channel, a=autozoom: cb.autozoom(r, c, a)).grid(row=row, column=4, sticky='ew')
+    # Label(cam1, text='타겟 크기(%)').grid(row=row, column=5, sticky='e')
+    scale = Scale(cam, from_=20, to=40, label='', orient=HORIZONTAL)
+    scale.grid(row=row, column=5, sticky='ew', padx=(15,0), pady=(15, 15))
+    scale.set(30)
+    scale.bind("<ButtonRelease-1>", lambda event, r=redis, c=channel, s=scale: cb.target_scale(r, c, s))
 
 ################################################################################
 
-center_icon = PhotoImage(file='src/controller/icons/center.png')
-unlock_icon = PhotoImage(file='src/controller/icons/unlock.png')
+center_icon = PhotoImage(file='{}src/controller/icons/center.png'.format(suffix))
+unlock_icon = PhotoImage(file='{}src/controller/icons/unlock.png'.format(suffix))
 
 row = 4
 for cam, channel in zip([cam1, cam2, cam3], ['uwtec:front', 'uwtec:rear', 'uwtec:side']):
@@ -96,9 +99,9 @@ for cam, channel in zip([cam1, cam2, cam3], ['uwtec:front', 'uwtec:rear', 'uwtec
 
 ################################################################################
 
-pause_icon = PhotoImage(file='src/controller/icons/pause.png')
-play_icon = PhotoImage(file='src/controller/icons/play.png')
-recording_icon = PhotoImage(file='src/controller/icons/recording.png')
+pause_icon = PhotoImage(file='{}src/controller/icons/pause.png'.format(suffix))
+play_icon = PhotoImage(file='{}src/controller/icons/play.png'.format(suffix))
+recording_icon = PhotoImage(file='{}src/controller/icons/recording.png'.format(suffix))
 
 row = 5
 for cam, channel in zip([cam1, cam2, cam3], ['uwtec:front', 'uwtec:rear', 'uwtec:side']):

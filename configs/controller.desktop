@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Controller
+Comment=Tracking Controller
+#Exec=/home/uwtec/work/Labs/test.py
+#Exec=/home/uwtec/work/UWTracking/bin/controller
+Exec=/usr/local/src/UWTracking/bin/controller
+Icon=/home/uwtec/.local/share/icons/hicolor/128x128/apps/controller.png
+Terminal=false
+Type=Application
+#StartupNotify=true
