@@ -13,6 +13,9 @@ import imutils
 from trackers.kcf.kcf_tracker import KCFTracker
 from trackers.color.color_tracker import ColorTracker
 from trackers.motion.motion_tracker import MotionTracker
+from trackers.dlib.dlib_tracker import DLIBTracker
+from trackers.cmt.cmt_tracker import CMTTracker
+
 from motor.motor import Motor
 
 import math
@@ -46,6 +49,9 @@ ap.add_argument("-z", "--zoom", help = "path to zoom control port")
 ap.add_argument("-w", "--width", type=int, default=640, help="screen width in px")
 
 ap.add_argument("--kcf", action="store_true", help="Enable KCF tracking")
+ap.add_argument("--dlib", action="store_true", help="Enable dlib tracking")
+ap.add_argument("--cmt", action="store_true", help="Enable CMT tracking")
+
 ap.add_argument("--color", action="store_true", help="Enable color subtracking")
 ap.add_argument("--motion", action="store_true", help="Enable Motion subtracking")
 ap.add_argument("--autozoom", action="store_true", help="Enable automatic zoom control")
@@ -161,23 +167,6 @@ cv2.moveWindow(title, win_x, win_y)
 tracking_window = {'x1': -1, 'y1': -1, 'x2': -1, 'y2': -1, 'dragging': False, 'start': False}
 cv2.setMouseCallback(title, onmouse, tracking_window)
 
-
-if args['color'] is True:
-    color_tracker = ColorTracker(width = WIDTH, height = HEIGHT)
-else:
-    color_tracker = None
-
-if args['kcf'] is True:
-    kcf_tracker = KCFTracker(True, False, True) # hog, fixed_window, multiscale
-else:
-    kcf_tracker = None
-
-if args['motion'] is True:
-    motion_tracker = MotionTracker()
-else:
-    motion_tracker = None
-
-
 capture = None
 
 pause_flag = False
@@ -193,11 +182,59 @@ toc = time.time()
 
 # Read the first frame
 grabbed, frame_full = stream.read()
-frame = imutils.resize(frame_full, width=WIDTH)
+frame = imutils.resize(frame_full, width=640)
 prev_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-debug_count = 0
-prev_distance = 0
+grabbed, frame_full = stream.read()
+frame = imutils.resize(frame_full, width=640)
+prev_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+# cv2.imshow('T', frame)
+# cv2.waitKey(3000)
+
+
+if args['kcf'] is True:
+    kcf_tracker = KCFTracker(True, False, True) # hog, fixed_window, multiscale
+else:
+    kcf_tracker = None
+
+if args['dlib'] is True:
+    dlib_tracker = DLIBTracker()
+else:
+    dlib_tracker = None
+
+# if args['cmt'] is True:
+#     cmt_tracker = CMTTracker(True, False, cmt_detector_threshold = 50, best_effort = False) # estimate_scale, estimate_rotation
+# elif args['cmt_alone'] is True:
+#     cmt_tracker = CMTTracker(True, False, cmt_detector_threshold = 50, best_effort = True) # estimate_scale, estimate_rotation
+
+if args['cmt'] is True:
+    cmt_tracker = CMTTracker(True, False, cmt_detector_threshold = 50, best_effort = False) # estimate_scale, estimate_rotation
+    gray0 = cv2.GaussianBlur(prev_gray, (3, 3), 0)
+
+    for x in range(100, 0, -10):
+        detector = cv2.BRISK_create(x, 3, 3.0)
+        keypoints = detector.detect(gray0)
+        # print("[CMT] {} => {}".format(x, len(keypoints)))
+        cmt_detector_threshold = x
+        if len(keypoints) > cmt_tracker.MIN_NUM_OF_KEYPOINTS_FOR_BRISK_THRESHOLD:
+            break
+    print("[CMT] BRISK threshold is set to {} with {} keypoints".format(x, len(keypoints)))
+    cmt_tracker.detector = detector
+    cmt_tracker.descriptor = detector
+else:
+    cmt_tracker = None
+
+if args['color'] is True:
+    color_tracker = ColorTracker(width = WIDTH, height = HEIGHT)
+else:
+    color_tracker = None
+
+if args['motion'] is True:
+    motion_tracker = MotionTracker()
+else:
+    motion_tracker = None
+
 while True:
     if pause_flag is False:
         grabbed, frame_full = stream.read()
@@ -226,18 +263,49 @@ while True:
 
                     #if you use hog feature, there will be a short pause after you draw a first boundingbox, that is due to the use of Numba.
                     kcf_tracker.init(frame)
-                    if motor_flag and limit_setup_flag:
-                        tracking_processing_flag = True # 초기화 결과에 상관없이 tracking 시작
-                    debug_count = 0
-                    prev_distance = 0
 
+                    if motor_flag and limit_setup_flag is False:
+                        tracking_processing_flag = False
+                    else:
+                        tracking_processing_flag = True
 
-                    if color_tracker:
-                        color_tracker.init(0)
-                    elif motion_tracker:
-                        motion_tracker.init(0)
-                        if motor_flag:
-                            motor.stop_moving = False
+                    # if color_tracker:
+                    #     color_tracker.init(0)
+                    # elif motion_tracker:
+                    #     motion_tracker.init(0)
+                    #     if motor_flag:
+                    #         motor.stop_moving = False
+                elif dlib_tracker:
+                    dlib_tracker.x1 = tracking_window['x1']
+                    dlib_tracker.y1 = tracking_window['y1']
+                    dlib_tracker.x2 = tracking_window['x2']
+                    dlib_tracker.y2 = tracking_window['y2']
+
+                    dlib_tracker.init(frame)
+                    if motor_flag and limit_setup_flag is False:
+                        tracking_processing_flag = False
+                    else:
+                        tracking_processing_flag = True
+
+                elif cmt_tracker:
+                    cmt_tracker.x1 = tracking_window['x1']
+                    cmt_tracker.y1 = tracking_window['y1']
+                    cmt_tracker.x2 = tracking_window['x2']
+                    cmt_tracker.y2 = tracking_window['y2']
+
+                    cmt_tracker.init(frame)
+                    if cmt_tracker.num_initial_keypoints == 0:
+                        print('[CMT] No keypoints found in selection')
+                        if tracking_processing_flag == True: # reinitialize case
+                            tracking_window['start'] = True # 강제로 초기화를 다시하는 효과
+                        else:
+                            tracking_processing_flag = False
+                    else:
+                        # print("[CMT] num_selected_keypoints is {}".format(cmt_tracker.num_initial_keypoints))
+                        if motor_flag and limit_setup_flag is False:
+                            tracking_processing_flag = False
+                        else:
+                            tracking_processing_flag = True
 
             elif motor_flag and ((tracking_processing_flag and motor.is_moving is False) or tracking_processing_flag is False ): #  and motor.is_moving is not True:  hl1sqi
                 centerX = (tracking_window['x1'] + tracking_window['x2']) // 2
@@ -276,7 +344,7 @@ while True:
                         wide_zoom_flag = True
 
                     else:
-                        wide_zoom_flag = False
+                        wide_zoom_flag = False # just in case
 
                         kcf_tracker.x1 = boundingbox[0]
                         kcf_tracker.y1 = boundingbox[1]
@@ -331,6 +399,99 @@ while True:
                     else:
                         wide_zoom_flag = False
 
+            elif dlib_tracker:
+                if dlib_tracker.force_init_flag is True:
+                    print('[DLIB] Force init')
+                    dlib_tracker.init(frame)
+                    dlib_tracker.force_init_flag = False
+                elif dlib_tracker.enable:
+                    score, x1, y1, x2, y2 = dlib_tracker.update(frame)
+                    # print('size:', (x2-x1)*(y2-y1))
+                    if score < 3 or (x2-x1)*(y2-y1) < 144:
+                        print('[DLIB] Disabled: score({:.02f}) is too low'.format(score))
+                        dlib_tracker.enable = False
+                        wide_zoom_flag = True
+                    else:
+                        wide_zoom_flag = False # just in case
+                        dlib_tracker.x1 = x1
+                        dlib_tracker.y1 = y1
+                        dlib_tracker.x2 = x2
+                        dlib_tracker.y2 = y2
+                        dlib_tracker.center = ((dlib_tracker.x1 + dlib_tracker.x2) // 2, (dlib_tracker.y1 + dlib_tracker.y2) // 2)
+
+                        cv2.rectangle(frame_draw,(dlib_tracker.x1,dlib_tracker.y1), (dlib_tracker.x2,dlib_tracker.y2), (0,255,0), 1)
+                        cv2.drawMarker(frame_draw, tuple(dlib_tracker.center), (0,255,0))
+                else: # dlib_tracker.enable is False
+                    wide_zoom_flag = False
+
+            elif cmt_tracker:
+                if cmt_tracker.force_init_flag is True:
+                    # print('[CMT]: Force init')
+                    cmt_tracker.force_init_flag = False
+                    cmt_tracker.init(frame)
+
+                    if cmt_tracker.num_initial_keypoints == 0:
+                        print('[CMT] No keypoints found in selection for ({},{}), ({},{})'.format(cmt_tracker.x1, cmt_tracker.y1, cmt_tracker.x2, cmt_tracker.y2))
+                        cmt_tracker.force_init_flag = True
+                        if kcf_tracker:
+                            cmt_tracker.x1 = kcf_tracker.x1
+                            cmt_tracker.x2 = kcf_tracker.x2
+                            cmt_tracker.y1 = kcf_tracker.y1
+                            cmt_tracker.y2 = kcf_tracker.y2
+                    # else:
+                    #     print("[CMT] num_selected_keypoints is {}".format(cmt_tracker.num_initial_keypoints))
+
+                else:
+                    cmt_tracker.update(frame)
+                    if cmt_tracker.best_effort is False and cmt_tracker.tracked_keypoints.shape[0] < 10: # or cmt_tracker.active_keypoints.shape[0] < 10
+                        cmt_tracker.has_result = False
+
+                    # if cmt_tracker.num_of_failure > 0 and cmt_tracker.best_effort is True:
+                    #     # print("[CMT] fail count: ", cmt_tracker.num_of_failure)
+                    #     cmt_tracker.force_init_flag = True
+
+                    if cmt_tracker.has_result:
+                        num_of_tracked_keypoints = len(cmt_tracker.tracked_keypoints)
+                        cmt_tracker.cX = int(cmt_tracker.center[0])
+                        cmt_tracker.cY = int(cmt_tracker.center[1])
+
+                        box_tl = cmt_tracker.tl
+                        box_br = cmt_tracker.br
+
+                        # print("[CMT] {}. Tracked(inlier): {}, Outliers: {}, Votes: {}: Active: {}, Scale: {:02.2f}"
+                        #     .format(cmt_tracker.frame_idx, num_of_tracked_keypoints, len(cmt_tracker.outliers), len(cmt_tracker.votes), len(cmt_tracker.active_keypoints), cmt_tracker.scale_estimate))
+
+                        box_center = ((box_tl[0] + box_br[0]) // 2, (box_tl[1] + box_br[1]) // 2)
+                        cmt_tracker.box_center = box_center
+
+                        width = box_br[0] - box_tl[0]
+                        height = box_br[1] - box_tl[1]
+
+                        (cmt_tracker.x1, cmt_tracker.y1) = box_tl
+                        (cmt_tracker.x2, cmt_tracker.y2) = box_br
+                        cmt_tracker.area = width * height
+
+                        # util.draw_str(frame, (550, 20), 'Tracking')
+                        cv2.rectangle(frame_draw, cmt_tracker.tl, cmt_tracker.br, (0,165,266), 1)
+                        cv2.drawMarker(frame_draw, cmt_tracker.box_center, (0,165,255))
+                        # cv2.drawMarker(frame, tuple(cmt_tracker.center.astype(np.int16)), (0, 0, 255))
+
+                        # util.draw_keypoints_by_number(cmt_tracker.tracked_keypoints, frame, (0, 0, 255))
+                        # util.draw_keypoints_by_number(cmt_tracker.outliers, frame, (255, 0, 0))
+                        # util.draw_keypoints(cmt_tracker.tracked_keypoints, frame, (255, 255, 255))
+                        # util.draw_keypoints(cmt_tracker.votes[:, :2], frame, (0, 255, 255))
+                        # util.draw_keypoints(cmt_tracker.outliers[:, :2], frame, (0, 0, 255))
+
+                        # cv2.drawMarker(frame, (cmt_tracker.cX, cmt_tracker.cY), (255, 255, 255))
+                        # cv2.drawMarker(frame, tuple(cmt_tracker.mean_center), (0, 0, 255))
+                        # test_tl = box_center[0] - cmt_tracker.mean_width//2, box_center[1] - cmt_tracker.mean_height//2
+                        # test_br = box_center[0] + cmt_tracker.mean_width//2, box_center[1] + cmt_tracker.mean_height//2
+                        # cv2.rectangle(frame, test_tl, test_br, (255, 255, 255), 1)
+
+                    else: # kcf_tracker.has_result == False
+                        pass
+
+
             if wide_zoom_flag and zoom_flag and zoom.is_zooming is False and zoom.current_zoom != 1:
                 current_zoom = 1
                 zoom.zoom_to(current_zoom, dur=2)
@@ -339,10 +500,15 @@ while True:
             if motor_flag and motor.is_moving is not True and motor.stop_moving is False: # and zoom.is_zooming is not True:
                 motor.driving_flag = False
 
-                if kcf_tracker:
-                    if kcf_tracker.enable:
-                        cX, cY = kcf_tracker.center
-                        motor.driving_flag = True
+                if kcf_tracker and kcf_tracker.enable:
+                    cX, cY = kcf_tracker.center
+                    motor.driving_flag = True
+                elif dlib_tracker and dlib_tracker.enable:
+                    cX, cY = dlib_tracker.center
+                    motor.driving_flag = True
+                elif cmt_tracker and cmt_tracker.has_result:
+                    cX, cY = cmt_tracker.box_center
+                    motor.driving_flag = True
                 else:
                     cX = HALF_WIDTH
                     cY = HALF_HEIGHT
@@ -354,19 +520,18 @@ while True:
                     # distance = math.sqrt(center_to_x**2 + center_to_y**2)
                     # print("[MOTOR] Distance from Center: ({}px, {}px)".format(center_to_x, center_to_y))
 
-                    if True: #debug_count > 5:
-                        if zoom_flag is False:
-                            motor.track(center_to_x, center_to_y)
-                        else:
-                            motor.track(center_to_x, center_to_y, zoom.current_zoom)
-                    debug_count += 1
-                    # prev_distance = distance
+                    if zoom_flag is False:
+                        motor.track(center_to_x, center_to_y)
+                    else:
+                        motor.track(center_to_x, center_to_y, zoom.current_zoom)
 
-            if (kcf_tracker and kcf_tracker.enable is True) and autozoom_flag and zoom.is_zooming is False: # and motor.is_moving is False:
-                next_zoom = zoom.find_next_auto_zoom(current_length = kcf_tracker.mean_width)
-                if next_zoom != zoom.current_zoom:
-                    # print("[ZOOM] {} to {}".format(zoom.current_zoom, next_zoom))
-                    zoom.zoom_to(next_zoom, dur=2) # hl1sqi dur => 0.1 ?
+
+            if (kcf_tracker and kcf_tracker.enable) or (dlib_tracker and dlib_tracker.enable):
+                if autozoom_flag and zoom.is_zooming is False: # and motor.is_moving is False:
+                    next_zoom = zoom.find_next_auto_zoom(current_length = kcf_tracker.mean_width)
+                    if next_zoom != zoom.current_zoom:
+                        # print("[ZOOM] {} to {}".format(zoom.current_zoom, next_zoom))
+                        zoom.zoom_to(next_zoom, dur=2) # hl1sqi dur => 0.1 ?
 
     if args["display"] is True:
         cv2.line(frame_draw, (HALF_WIDTH, 0), (HALF_WIDTH, WIDTH), (200, 200, 200), 0)
@@ -482,7 +647,8 @@ while True:
                 print('[FIFO] Disabled')
 
         elif key == ord('d'): # 'd' for 모터 각도 보기
-            print("[MOTOR] Degree: ({:.02f}, {:.02f})".format(motor.sum_of_x_degree, motor.sum_of_y_degree))
+            if motor_flag:
+                print("[MOTOR] Degree: ({:.02f}, {:.02f})".format(motor.sum_of_x_degree, motor.sum_of_y_degree))
 
         elif key == ord('l'): # 'l' for 랩 타임 보기
             show_lap_time_flag = not show_lap_time_flag
@@ -508,10 +674,6 @@ while True:
                 if next_zoom != zoom.current_zoom:
                     zoom.zoom_to(next_zoom, dur=0.1)
 
-        elif key == ord('t'):
-            print(datetime.datetime.now().time().isoformat())
-            redis_agent.test(channel_name)
-
         # elif key == ord('f'): # 'f' for Force init
         #     if kcf_tracker:
         #         if color_tracker:
@@ -527,21 +689,26 @@ while True:
         #             if motor:
         #                 motor.stop_moving = True
 
-        # elif key == ord('t') and (args['cmt_alone'] or args['cmt']) is True:
-        #     grabbed, frame_full = stream.read()
-        #     frame = imutils.resize(frame_full, width=WIDTH)
-        #     gray0 = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        #     gray0 = cv2.GaussianBlur(gray0, (3, 3), 0)
-        #
-        #     for x in range(10, 500, 10):
-        #         detector = cv2.BRISK_create(x, 3, 3.0)
-        #         keypoints = detector.detect(gray0)
-        #         cmt_detector_threshold = x
-        #         if len(keypoints) < cmt_tracker.MIN_NUM_OF_KEYPOINTS_FOR_BRISK_THRESHOLD:
-        #             break
-        #     print("[CMT] BRISK threshold is set to {} with {} keypoints".format(x, len(keypoints)))
-        #     cmt_tracker.detector = detector
-        #     cmt_tracker.descriptor = detector
+        # elif key == ord('t'):
+        #     print(datetime.datetime.now().time().isoformat())
+        #     redis_agent.test(channel_name)
+
+        elif key == ord('t') and cmt_tracker:
+            grabbed, test_frame = stream.read()
+            test_frame = imutils.resize(test_frame, width=WIDTH)
+            gray0 = cv2.cvtColor(test_frame, cv2.COLOR_BGR2GRAY)
+            gray0 = cv2.GaussianBlur(gray0, (3, 3), 0)
+
+            for x in range(100, 10, -10):
+                detector = cv2.BRISK_create(x, 3, 3.0)
+                keypoints = detector.detect(gray0)
+                # print("[CMT] {} => {}".format(x, len(keypoints)))
+                cmt_detector_threshold = x
+                if len(keypoints) >= cmt_tracker.MIN_NUM_OF_KEYPOINTS_FOR_BRISK_THRESHOLD:
+                    break
+            print("[CMT] BRISK threshold is set to {} with {} keypoints".format(x, len(keypoints)))
+            cmt_tracker.detector = detector
+            cmt_tracker.descriptor = detector
 
         if gui_flag:
             if redis_agent.quit:  # ESC or 'q' for 종료

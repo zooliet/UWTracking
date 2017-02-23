@@ -335,7 +335,7 @@ class Motor:
         # if y_pulse != 0 or x_pulse != 0:
         #     self.move(x = x_pulse, y = y_pulse, z = z_pulse, f = f_pulse, t = t_sec)
         #     self.is_moving = True
-        #     motor_timer = Timer(t_sec*2, self.has_finished_moving, args = [False])
+        #     motor_timer = Timer(t_sec*1.2, self.has_finished_moving, args = [False])
         #     motor_timer.start()
 
     def has_finished_zooming(self, zoom):

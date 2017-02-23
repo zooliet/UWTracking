@@ -14,7 +14,7 @@ class CMTTracker:
     THR_CONF = 0.75
     THR_RATIO = 0.8
     DESC_LENGTH = 512
-    MIN_NUM_OF_KEYPOINTS_FOR_BRISK_THRESHOLD = 900 # 900
+    MIN_NUM_OF_KEYPOINTS_FOR_BRISK_THRESHOLD = 300 # 900
     PREV_HISTORY_SIZE = 100
 
     def __init__(self, scale, rotation, cmt_detector_threshold = 70, best_effort = False):
@@ -26,7 +26,7 @@ class CMTTracker:
         self.descriptor = self.detector
         self.matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
 
-    def init(self, frame, options):
+    def init(self, frame):
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray = cv2.GaussianBlur(gray, (3, 3), 0)
 
