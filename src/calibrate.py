@@ -10,11 +10,8 @@ if PY3:
 import cv2
 import numpy as np
 import imutils
-from imutils.video import WebcamVideoStream
-from imutils.video import FPS
-import hashlib
 
-from motor import Motor
+from motor.motor import Motor
 
 import math
 from threading import Timer
@@ -31,60 +28,27 @@ import re
 import argparse
 
 ap = argparse.ArgumentParser()
-# ap.add_argument("--camera", type=int, default=0, help = "camera number")
-ap.add_argument("-c", "--camera", type=int, default=0, help = "camera number")
+
+ap.add_argument("-c", "--camera", help = "camera number")
 ap.add_argument("-p", "--path", help = "path to video file")
-ap.add_argument("-d", "--display", action="store_true", help="Show display")
-ap.add_argument("-s", "--serial", help = "path to serial device")
+ap.add_argument("-d", "--display", action="store_true", help="show display")
+ap.add_argument("-m", "--motor", help = "path to motor device")
 ap.add_argument("-z", "--zoom", help = "path to zoom control port")
+ap.add_argument("-w", "--width", type=int, default=640, help="screen width in px")
 
 args = vars(ap.parse_args())
-print("[INFO] Command: ", args)
+# print("[INFO] Command: ", args)
 
-FRAME_WIDTH       = 1980  # 640x360, 1024x576, 1280x720, 1920x1080
-FRAME_HEIGHT      = FRAME_WIDTH * 9 // 16
+FRAME_WIDTH = 1920
+FRAME_HEIGHT = 1080
 
-WIDTH       = 1024  # 640x360, 1024x576, 1280x720, 1920x1080
+WIDTH       = args['width']  # 640x360, 1024x576, 1280x720, 1920x1080
 HEIGHT      = WIDTH * 9 // 16
 HALF_WIDTH  = WIDTH // 2
 HALF_HEIGHT = HEIGHT // 2
 
 MIN_SELECTION_WIDTH  = 16 # or 20, 10
 MIN_SELECTION_HEIGHT = 9 # or 20, 10
-
-if args['path']:
-    stream = cv2.VideoCapture(args['path'])
-else:
-    stream = cv2.VideoCapture(args['camera'])
-    grabbed, frame = stream.read()
-
-stream.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_WIDTH)
-stream.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
-
-pause_flag = False
-capture = None
-tracking_window = {'x1': -1, 'y1': -1, 'x2': -1, 'y2': -1, 'dragging': False, 'start': False}
-motor_is_moving_flag = False
-zoom_is_moving_flag = False
-fifo_enable_flag = False
-
-zooms = [1,2,4,8,16]
-zoom_idx = 0
-current_zoom = zooms[zoom_idx]
-color_select_flag = False
-set_preset_flag = False
-
-def motor_has_finished_moving(args):
-    global motor_is_moving_flag
-    motor_is_moving_flag = False
-    # print("[MOTOR] End of Moving")
-
-def zoom_has_finished_moving(args):
-    # zoom.stop_zooming()
-
-    global zoom_is_moving_flag
-    zoom_is_moving_flag = False
-    # print("[ZOOM] End of Zooming")
 
 def onmouse(event, x, y, flags, param):
     if event == cv2.EVENT_LBUTTONDOWN:
@@ -114,30 +78,53 @@ def onmouse(event, x, y, flags, param):
             param['start'] = True
             param['dragging'] = False
 
-if args["display"] is True:
-    cv2.namedWindow('Tracking')
-    cv2.moveWindow('Tracking', 0, 0)
-    cv2.setMouseCallback('Tracking', onmouse, tracking_window)
+if args['path']:
+    stream = cv2.VideoCapture(args['path'])
+    FRAME_HEIGHT = int(stream.get(4))
+    FRAME_WIDTH = int(stream.get(3))
+else:
+    stream = cv2.VideoCapture(args['camera'])
+    stream.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_WIDTH)
+    stream.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
 
+if args['motor']:
+    motor = Motor(dev = args['motor'], baud = 115200, screen_width = WIDTH)
+    motor_flag = True
+else:
+    motor = None
+    motor_flag = False
+
+if args['zoom']:
+    zoom = Motor(dev = args['zoom'], baud = 115200, screen_width = WIDTH)
+    zoom.zoom_x1()
+    zoom_flag = True
+else:
+    zoom = None
+    zoom_flag = False
+
+cv2.namedWindow('Calibrate')
+cv2.moveWindow('Calibrate', 0, 0)
+tracking_window = {'x1': -1, 'y1': -1, 'x2': -1, 'y2': -1, 'dragging': False, 'start': False}
+cv2.setMouseCallback('Calibrate', onmouse, tracking_window)
+
+capture = None
+
+pause_flag = False
+color_select_flag = False
+set_preset_flag = False
+set_move_flag = True
+
+
+# Read the first frame
+grabbed, frame = stream.read()
+frame = imutils.resize(frame, width=WIDTH)
 
 def nothing(x):
     pass
 
-if args['serial']:
-    motor = Motor(dev = args['serial'], baud = 115200)
-else:
-    motor = None
-
-if args['zoom']:
-    zoom = Motor(dev = args['zoom'], baud = 115200)
-    zoom.zoom_x1()
-else:
-    zoom = None
-
 # Initialize to check if HSV min/max value changes
 hMin = sMin = vMin = hMax = sMax = vMax = 0
 phMin = psMin = pvMin = phMax = psMax = pvMax = 0
-
 
 while True:
     if pause_flag is False:
@@ -204,17 +191,16 @@ while True:
                     #
                     # # upper[0][0] =  upper[0][0] % 180
                     # print("Lower: {}, Upper: {}".format(lower, upper))
-                elif args['serial'] and motor_is_moving_flag is not True and zoom_is_moving_flag is not True:
+                elif motor_flag and motor.is_moving is False:
                     centerX = (tracking_window['x1'] + tracking_window['x2']) // 2
                     centerY = (tracking_window['y1'] + tracking_window['y2']) // 2
                     center_to_x = centerX - HALF_WIDTH
                     center_to_y = HALF_HEIGHT - centerY # new controller 2월 1일
 
-                    motor_timer = Timer(1, motor_has_finished_moving, args = [False])
-                    (x_to, y_to, z_to, f_to) = motor.pixel_to_pulse(center_to_x, center_to_y, current_zoom, limit = False)
-                    motor.move(x = x_to, y = y_to, z = z_to, f = f_to, t = 1)
-                    motor_timer.start()
-                    motor_is_moving_flag = True
+                    if zoom_flag is False:
+                        motor.move_to(center_to_x, center_to_y)
+                    elif zoom_flag and zoom.is_zooming is not True:
+                        motor.move_to(center_to_x, center_to_y, zoom.current_zoom)
 
             capture = None
             tracking_window['start'] = False
@@ -223,8 +209,13 @@ while True:
         cv2.line(frame, (HALF_WIDTH, 0), (HALF_WIDTH, WIDTH), (200, 200, 200), 0)
         cv2.line(frame, (0, HALF_HEIGHT), (WIDTH, HALF_HEIGHT), (200, 200, 200), 0)
 
-        if set_preset_flag is True:
-            x = 8
+        if set_preset_flag:
+            util.draw_str(frame, (20, 20), 'Preset setting mode')
+
+
+
+        if True: #set_preset_flag is True:
+            x = 4
             k = x * 1
             x1 = int(HALF_WIDTH-(WIDTH/k))
             y1 = int(HALF_HEIGHT-(HEIGHT/k))
@@ -232,33 +223,33 @@ while True:
             y2 = int(HALF_HEIGHT+(HEIGHT/k))
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 0)
 
-            k = x * 2
-            x1 = int(HALF_WIDTH-(WIDTH/k))
-            y1 = int(HALF_HEIGHT-(HEIGHT/k))
-            x2 = int(HALF_WIDTH+(WIDTH/k))
-            y2 = int(HALF_HEIGHT+(HEIGHT/k))
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 0)
-
-            k = x * 4
-            x1 = int(HALF_WIDTH-(WIDTH/k))
-            y1 = int(HALF_HEIGHT-(HEIGHT/k))
-            x2 = int(HALF_WIDTH+(WIDTH/k))
-            y2 = int(HALF_HEIGHT+(HEIGHT/k))
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 0)
-
-            k = x * 8
-            x1 = int(HALF_WIDTH-(WIDTH/k))
-            y1 = int(HALF_HEIGHT-(HEIGHT/k))
-            x2 = int(HALF_WIDTH+(WIDTH/k))
-            y2 = int(HALF_HEIGHT+(HEIGHT/k))
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 0)
-
-            k = x * 16
-            x1 = int(HALF_WIDTH-(WIDTH/k))
-            y1 = int(HALF_HEIGHT-(HEIGHT/k))
-            x2 = int(HALF_WIDTH+(WIDTH/k))
-            y2 = int(HALF_HEIGHT+(HEIGHT/k))
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 0)
+            # k = x * 2
+            # x1 = int(HALF_WIDTH-(WIDTH/k))
+            # y1 = int(HALF_HEIGHT-(HEIGHT/k))
+            # x2 = int(HALF_WIDTH+(WIDTH/k))
+            # y2 = int(HALF_HEIGHT+(HEIGHT/k))
+            # cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 0)
+            #
+            # k = x * 4
+            # x1 = int(HALF_WIDTH-(WIDTH/k))
+            # y1 = int(HALF_HEIGHT-(HEIGHT/k))
+            # x2 = int(HALF_WIDTH+(WIDTH/k))
+            # y2 = int(HALF_HEIGHT+(HEIGHT/k))
+            # cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 0)
+            #
+            # k = x * 8
+            # x1 = int(HALF_WIDTH-(WIDTH/k))
+            # y1 = int(HALF_HEIGHT-(HEIGHT/k))
+            # x2 = int(HALF_WIDTH+(WIDTH/k))
+            # y2 = int(HALF_HEIGHT+(HEIGHT/k))
+            # cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 0)
+            #
+            # k = x * 16
+            # x1 = int(HALF_WIDTH-(WIDTH/k))
+            # y1 = int(HALF_HEIGHT-(HEIGHT/k))
+            # x2 = int(HALF_WIDTH+(WIDTH/k))
+            # y2 = int(HALF_HEIGHT+(HEIGHT/k))
+            # cv2.rectangle(frame, (x1, y1), (x2, y2), (0,0,255), 0)
 
         if tracking_window['dragging'] == True:
             pt1 = (tracking_window['x1'], tracking_window['y1'])
@@ -269,86 +260,65 @@ while True:
 
             frame = np.copy(capture)
             cv2.rectangle(frame, pt1, pt2, (0, 255, 0,), 1)
-            cv2.imshow("Tracking", frame)
+            cv2.imshow("Calibrate", frame)
 
         # pause가 아닌 상태에서 Tracking window 보이기(당연),
         # 그런데 pause 일때 굳이 동작 않도록 처리한 이유는? => pause 일때 마우스 조작이 일어나는 경우에 대처하기 위해, 즉, 다른곳에서 윈도우 처리
         if pause_flag is False:
-            cv2.imshow("Tracking", frame)
-            if fifo_enable_flag is True:
-                fifo.write(frame)
+            cv2.imshow("Calibrate", frame)
 
     key = cv2.waitKey(1)
     if key == 27 or key == ord('q'):
         break
     elif key == ord(' '):
         pause_flag = not pause_flag
-    elif key == ord('f'):
-        fifo_enable_flag = not fifo_enable_flag
-        if fifo_enable_flag is True:
-            print('[FIFO] Enabled')
-            fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
-            if not os.path.exists('captures'):
-                os.makedirs('captures')
-            files = glob.glob('captures/capture-*.mkv')
-            if len(files) > 0:
-                files.sort()
-                last_file = files[-1]
-                last_num = re.findall(r"[0-9]{4}", last_file)[0]
-                last_num = int(last_num)
-                pic_num = last_num + 1
-            else:
-                pic_num = 0
-
-            file_name =  "captures/capture-{:04d}.mkv".format(pic_num)
-            fifo = cv2.VideoWriter(file_name, fourcc, 20.0, (frame.shape[1], frame.shape[0]))
-        else:
-            print('[FIFO] Disabled')
-
     elif key == ord('p'):
         set_preset_flag = not set_preset_flag
+    elif key == ord('m'):
+        set_move_flag = not set_move_flag
     elif key >= ord('1') and key <= ord('5'):
         preset = key - 48
         if set_preset_flag is True:
             zoom.set_preset(preset)
+            current_zoom = {v:k for k, v in zoom.zoom_to_preset.items()}[preset]
+            zoom.current_zoom = current_zoom
         else:
             zoom.get_preset(preset)
-    elif key == 65362: # 'up', 63232 for Mac
-        if zoom_is_moving_flag is not True and current_zoom < 16:
-            zoom_idx += 1
-            current_zoom = zooms[zoom_idx]
-            zoom.zoom_to(current_zoom)
-            zoom_is_moving_flag = True
-            zoom_timer = Timer(1, zoom_has_finished_moving, args = [False])
-            zoom_timer.start()
-    elif key == 65364: # 'down', 63233 for Mac
-        if zoom_is_moving_flag is not True and current_zoom > 1:
-            zoom_idx -= 1
-            current_zoom = zooms[zoom_idx]
-            zoom.zoom_to(current_zoom)
-            zoom_is_moving_flag = True
-            zoom_timer = Timer(1, zoom_has_finished_moving, args = [False])
-            zoom_timer.start()
-    elif key == 65361: # 'left', 63234 for Mac
-        if zoom_is_moving_flag is not True:
-            # print("[ZOOM] to 1")
-            # zoom_idx = 0
-            # current_zoom = zooms[zoom_idx]
-            # zoom.zoom_x1()
-            # zoom_is_moving_flag = True
-            # zoom_timer = Timer(2.5, zoom_has_finished_moving, args = [False])
-            # zoom_timer.start()
-            zoom.zoom('out')
-    elif key == 65363: # 'right', 63235 for Mac
-        if zoom_is_moving_flag is not True:
-            # print("[ZOOM] to 20")
-            # zoom_idx = 6
-            # current_zoom = zooms[zoom_idx]
-            # zoom.zoom_x20()
-            # zoom_is_moving_flag = True
-            # zoom_timer = Timer(2.5, zoom_has_finished_moving, args = [False])
-            # zoom_timer.start()
-            zoom.zoom('in')
+            current_zoom = {v:k for k, v in zoom.zoom_to_preset.items()}[preset]
+            zoom.current_zoom = current_zoom
+    elif key%256 == 82: # 'up': 65362 for Ubuntu, 63232 for Mac
+        if set_preset_flag:
+            if zoom_flag and zoom.is_zooming is not True:
+                next_zoom = zoom.find_next_zoom(dir='in')
+                if next_zoom != zoom.current_zoom:
+                    zoom.zoom_to(next_zoom, dur=0.1)
+        else:
+            if motor_flag and motor.is_moving is False:
+                motor.move_to(0, 1, zoom.current_zoom)
+    elif key%256 == 84: # 'down': 65364 for Ubuntu, 63233 for Mac
+        if set_preset_flag:
+            if zoom_flag and zoom.is_zooming is not True:
+                next_zoom = zoom.find_next_zoom(dir='out')
+                if next_zoom != zoom.current_zoom:
+                    zoom.zoom_to(next_zoom, dur=0.1)
+        else:
+            if motor_flag and motor.is_moving is False:
+                motor.move_to(0, -1, zoom.current_zoom)
+    elif key%256 == 81: # 'left': 65361 for Ubuntu, 63234 for Mac
+        if set_preset_flag:
+            if zoom_flag and zoom.is_zooming is not True:
+                zoom.zoom('out')
+        else:
+            if motor_flag and motor.is_moving is False:
+                motor.move_to(-1, 0, zoom.current_zoom)
+
+    elif key%256 == 83: # 'right': 65363 for Ubuntu, 63235 for Mac
+        if set_preset_flag:
+            if zoom_flag and zoom.is_zooming is not True:
+                zoom.zoom('in')
+        else:
+            if motor_flag and motor.is_moving is False:
+                motor.move_to(1, 0, zoom.current_zoom)
     elif key == ord('c'):
         color_select_flag = not color_select_flag
         if color_select_flag is True:
@@ -368,3 +338,7 @@ while True:
             cv2.destroyWindow('Tracking')
             cv2.namedWindow('Tracking')
             cv2.moveWindow('Tracking', 0, 0)
+
+# do a bit of cleanup
+cv2.destroyAllWindows()
+stream.release()

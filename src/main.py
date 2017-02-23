@@ -27,9 +27,9 @@ import os
 import glob
 import re
 
-# from numpy import isnan
-# import redis
-# import json
+import redis
+import json
+from controller import redis_agent
 
 # construct the argument parse and parse the arguments
 import argparse
@@ -51,6 +51,7 @@ ap.add_argument("--motion", action="store_true", help="Enable Motion subtracking
 ap.add_argument("--autozoom", action="store_true", help="Enable automatic zoom control")
 
 ap.add_argument("--view", help = "select the view") # front, rear, side
+ap.add_argument("--gui", action="store_true", help="Enable GUI control")
 
 args = vars(ap.parse_args())
 # print("[INFO] Command: ", args)
@@ -99,18 +100,26 @@ if args["display"] is True:
         title = '전면'
         win_x = 0
         win_y = 0
+        channel_name = 'uwtec:front'
+        capture_name = 'front'
     elif args['view'] == 'rear':
         title = '후면'
         win_x = 640
         win_y = 0
+        channel_name = 'uwtec:rear'
+        capture_name = 'rear'
     elif args['view'] == 'side':
         title = '측면'
         win_x = 1280
         win_y = 0
+        channel_name = 'uwtec:side'
+        capture_name = 'side'
     else:
         title = '카메라'
         win_x = 0
         win_y = 0
+        channel_name = 'uwtec:camera'
+        capture_name = 'camera'
 
 if args['path']:
     stream = cv2.VideoCapture(args['path'])
@@ -137,6 +146,15 @@ else:
     zoom = None
     zoom_flag = False
     autozoom_flag = False
+
+if args['gui']:
+    gui_flag = True
+    r = redis.Redis()
+    redis_agent = redis_agent.RedisAgent(r, [channel_name])
+    redis_agent.start()
+else:
+    gui_flag = False
+
 
 cv2.namedWindow(title)
 cv2.moveWindow(title, win_x, win_y)
@@ -417,11 +435,12 @@ while True:
                 # upscale = imutils.resize(selected, width=FRAME_WIDTH)
                 # cv2.imshow("Upscale", upscale)
 
-
         key = cv2.waitKey(1)
         # print("You pressed {:d} (0x{:x}), 2LSB: {:d} ({:s})".format(key, key, key%2**16, repr(chr(key%256)) if key%256 < 128 else '?'))
 
         if key == 27 or key == ord('q'):  # ESC or 'q' for 종료
+            if gui_flag:
+                redis_agent.stop(channel_name)
             break
         elif key == ord(' '): # SPACE for 화면 정지
             pause_flag = not pause_flag
@@ -447,7 +466,7 @@ while True:
                 if not os.path.exists('/home/uwtec/Documents/captures'):
                     os.makedirs('/home/uwtec/Documents/captures')
 
-                files = glob.glob('/home/uwtec/Documents/captures/{}-*.mkv'.format(title))
+                files = glob.glob('/home/uwtec/Documents/captures/{}-*.mkv'.format(capture_name))
                 if len(files) > 0:
                     files.sort()
                     last_file = files[-1]
@@ -457,7 +476,7 @@ while True:
                 else:
                     pic_num = 0
 
-                file_name =  "/home/uwtec/Documents/captures/{}-{:04d}.mkv".format(title, pic_num)
+                file_name =  "/home/uwtec/Documents/captures/{}-{:04d}.mkv".format(capture_name, pic_num)
                 fifo = cv2.VideoWriter(file_name, fourcc, 30.0, (frame.shape[1], frame.shape[0]))
             else:
                 print('[FIFO] Disabled')
@@ -489,6 +508,10 @@ while True:
                 if next_zoom != zoom.current_zoom:
                     zoom.zoom_to(next_zoom, dur=0.1)
 
+        elif key == ord('t'):
+            print(datetime.datetime.now().time().isoformat())
+            redis_agent.test(channel_name)
+
         # elif key == ord('f'): # 'f' for Force init
         #     if kcf_tracker:
         #         if color_tracker:
@@ -519,6 +542,88 @@ while True:
         #     print("[CMT] BRISK threshold is set to {} with {} keypoints".format(x, len(keypoints)))
         #     cmt_tracker.detector = detector
         #     cmt_tracker.descriptor = detector
+
+        if gui_flag:
+            if redis_agent.quit:  # ESC or 'q' for 종료
+                redis_agent.stop(channel_name)
+                break
+
+            elif redis_agent.stop_tracking:
+                redis_agent.stop_tracking = False
+                tracking_processing_flag = False
+
+            elif redis_agent.zoom_in: # 'up': 65362 for Ubuntu, 63232 for Mac
+                redis_agent.zoom_in = False
+                if zoom_flag and zoom.is_zooming is not True:
+                    next_zoom = zoom.find_next_zoom(dir='in')
+                    if next_zoom != zoom.current_zoom:
+                        zoom.zoom_to(next_zoom, dur=0.1)
+            elif redis_agent.zoom_out: # 'down': 65364 for Ubuntu, 63233 for Mac
+                redis_agent.zoom_out = False
+                if zoom_flag and zoom.is_zooming is not True:
+                    next_zoom = zoom.find_next_zoom(dir='out')
+                    if next_zoom != zoom.current_zoom:
+                        zoom.zoom_to(next_zoom, dur=0.1)
+            elif redis_agent.zoom_x1: # 'left': 65361 for Ubuntu, 63234 for Mac
+                redis_agent.zoom_x1 = False
+                if zoom_flag and zoom.is_zooming is not True:
+                    next_zoom = zoom.find_next_zoom(dir='first')
+                    if next_zoom != zoom.current_zoom:
+                        zoom.zoom_to(next_zoom, dur=0.1)
+            elif redis_agent.autozoom:
+                redis_agent.autozoom = False
+                if zoom_flag:
+                    autozoom_flag = True if redis_agent.autozoom_enable else False
+
+            elif redis_agent.pause:
+                redis_agent.pause = False
+                pause_flag = True
+            elif redis_agent.play:
+                redis_agent.play = False
+                pause_flag = False
+            elif redis_agent.start_recording:
+                redis_agent.start_recording = False
+                fifo_enable_flag = True
+                fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
+                if not os.path.exists('/home/uwtec/Documents/captures'):
+                    os.makedirs('/home/uwtec/Documents/captures')
+
+                files = glob.glob('/home/uwtec/Documents/captures/{}-*.mkv'.format(capture_name))
+                if len(files) > 0:
+                    files.sort()
+                    last_file = files[-1]
+                    last_num = re.findall(r"[0-9]{4}", last_file)[0]
+                    last_num = int(last_num)
+                    pic_num = last_num + 1
+                else:
+                    pic_num = 0
+
+                file_name =  "/home/uwtec/Documents/captures/{}-{:04d}.mkv".format(capture_name, pic_num)
+                fifo = cv2.VideoWriter(file_name, fourcc, 30.0, (frame.shape[1], frame.shape[0]))
+            elif redis_agent.stop_recording:
+                redis_agent.stop_recording = False
+                fifo_enable_flag = False
+
+            elif redis_agent.center:
+                redis_agent.center = False
+                if motor_flag:
+                    motor.sum_of_x_degree = motor.sum_of_y_degree = 0
+                    # motor.right_limit = 90
+                    # motor.left_limit = -90
+                    # motor.up_limit = 30
+                    # motor.down_limit = -90
+                    limit_setup_flag = True
+
+            elif redis_agent.unlock:
+                redis_agent.unlock = False
+                if motor_flag:
+                    motor.sum_of_x_degree = motor.sum_of_y_degree = 0
+                    # motor.right_limit = 90
+                    # motor.left_limit = -90
+                    # motor.up_limit = 30
+                    # motor.down_limit = -90
+                    # limit_setup_flag = False
+
 
         prev_frame = np.copy(frame)
 
