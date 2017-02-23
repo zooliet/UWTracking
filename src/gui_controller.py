@@ -16,7 +16,7 @@ redis = redis.Redis()
 PROGRAM_NAME = "Tracking Controller"
 root = Tk()
 root.geometry('1920x420+0+412')
-# root.overrideredirect(1)
+root.overrideredirect(1)
 root.title(PROGRAM_NAME)
 
 
