@@ -15,24 +15,40 @@ def exit_app(redis, root, event=None):
 
 ################################################################################
 
-def stop_tracking(redis, channel, event=None):
+# def stop_tracking(redis, channel, event=None):
+def stop_tracking(redis, channel, button, event=None):
+    button.config(state='normal', background='orange')
+    button.after(600, lambda: button.config(state='normal', background='#d9d9d9'))
+
     j = {'action': 'stop_tracking'}
     jstr = json.dumps(j)
     redis.publish(channel, jstr)
 
 ################################################################################
 
-def zoom_in(redis, channel, event=None):
+# def zoom_in(redis, channel, event=None):
+def zoom_in(redis, channel, button, event=None):
+    button.config(state='normal', background='orange')
+    button.after(600, lambda: button.config(state='normal', background='#d9d9d9'))
+
     j = {'action': 'zoom_in'}
     jstr = json.dumps(j)
     redis.publish(channel, jstr)
 
-def zoom_out(redis, channel, event=None):
+# def zoom_out(redis, channel, event=None):
+def zoom_out(redis, channel, button, event=None):
+    button.config(state='normal', background='orange')
+    button.after(600, lambda: button.config(state='normal', background='#d9d9d9'))
+
     j = {'action': 'zoom_out'}
     jstr = json.dumps(j)
     redis.publish(channel, jstr)
 
-def zoom_x1(redis, channel, event=None):
+# def zoom_x1(redis, channel, event=None):
+def zoom_x1(redis, channel, button, event=None):
+    button.config(state='normal', background='orange')
+    button.after(600, lambda: button.config(state='normal', background='#d9d9d9'))
+
     j = {'action': 'zoom_x1'}
     jstr = json.dumps(j)
     redis.publish(channel, jstr)
@@ -79,12 +95,21 @@ def recording(redis, channel, button, event=None):
 
 ################################################################################
 
-def center(redis, channel, event=None):
+# def center(redis, channel, event=None):
+def center(redis, channel, button, event=None):
+    button.config(state='normal', background='orange')
+    button.after(600, lambda: button.config(state='normal', background='#d9d9d9'))
+
     j = {'action': 'center'}
     jstr = json.dumps(j)
+    # print(jstr)
     redis.publish(channel, jstr)
 
-def unlock(redis, channel, event=None):
+# def unlock(redis, channel, event=None):
+def unlock(redis, channel, button, event=None):
+    button.config(state='normal', background='orange')
+    button.after(600, lambda: button.config(state='normal', background='#d9d9d9'))
+
     j = {'action': 'unlock'}
     jstr = json.dumps(j)
     redis.publish(channel, jstr)

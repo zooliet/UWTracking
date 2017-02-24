@@ -62,8 +62,15 @@ unlock_icon = PhotoImage(file='{}src/controller/icons/unlock.png'.format(suffix)
 row = 2
 for cam, channel in zip([cam1, cam2, cam3], ['uwtec:rear', 'uwtec:side', 'uwtec:front']):
     Label(cam, text='모터:').grid(row=row, column=0, sticky='e', padx=15, pady=(30, 30))
-    Button(cam, text='센터 지정', image=center_icon, compound='left', command=lambda r=redis, c=channel: cb.center(r, c)).grid(row=row, column=1, sticky='ew')
-    # Button(cam, text='범위 해제', image=unlock_icon, compound='left', command=lambda r=redis, c=channel: cb.unlock(r, c)).grid(row=row, column=2, sticky='ew')
+    # Button(cam, text='센터 지정', image=center_icon, compound='left', command=lambda r=redis, c=channel: cb.center(r, c)).grid(row=row, column=1, sticky='ew')
+    button =  Button(cam, text='센터 지정', image=center_icon, compound='left')
+    button.grid(row=row, column=1, sticky='ew')
+    button.bind('<Button-1>', lambda event, r=redis, c=channel, b=button: cb.center(r, c, b))
+
+    # # Button(cam, text='범위 해제', image=unlock_icon, compound='left', command=lambda r=redis, c=channel: cb.unlock(r, c)).grid(row=row, column=2, sticky='ew')
+    # button =  Button(cam, text='범위 해제', image=unlock_icon, compound='left')
+    # button.grid(row=row, column=2, sticky='ew')
+    # button.bind('<Button-1>', lambda event, r=redis, c=channel, b=button: cb.unlock(r, c, b))
 
 ################################################################################
 
@@ -80,9 +87,21 @@ row = 3
 for cam, channel, autozoom in zip([cam1, cam2, cam3], ['uwtec:rear', 'uwtec:side', 'uwtec:front'], [autozoom_1, autozoom_2, autozoom_3]):
     # print(cam, channel, autozoom)
     Label(cam, text='줌:').grid(row=row, column=0, sticky='e', padx=15, pady=(30, 30))
-    Button(cam, text='줌 인', image=zoom_in_icon, compound='left', command=lambda r=redis, c=channel: cb.zoom_in(r, c)).grid(row=row, column=1, sticky='ew')
-    Button(cam, text='줌 아웃', image=zoom_out_icon, compound='left', command=lambda r=redis, c=channel: cb.zoom_out(r, c)).grid(row=row, column=2, sticky='ew')
-    Button(cam, text='광각 줌', image=zoom_wide_icon, compound='left', command=lambda r=redis, c=channel: cb.zoom_x1(r, c)).grid(row=row, column=3, sticky='ew')
+    # Button(cam, text='줌 인', image=zoom_in_icon, compound='left', command=lambda r=redis, c=channel: cb.zoom_in(r, c)).grid(row=row, column=1, sticky='ew')
+    button = Button(cam, text='줌 인', image=zoom_in_icon, compound='left')
+    button.grid(row=row, column=1, sticky='ew')
+    button.bind('<Button-1>', lambda event, r=redis, c=channel, b=button: cb.zoom_in(r, c, b))
+
+    # Button(cam, text='줌 아웃', image=zoom_out_icon, compound='left', command=lambda r=redis, c=channel: cb.zoom_out(r, c)).grid(row=row, column=2, sticky='ew')
+    button = Button(cam, text='줌 아웃', image=zoom_out_icon, compound='left')
+    button.grid(row=row, column=2, sticky='ew')
+    button.bind('<Button-1>', lambda event, r=redis, c=channel, b=button: cb.zoom_out(r, c, b))
+
+    # Button(cam, text='광각 줌', image=zoom_wide_icon, compound='left', command=lambda r=redis, c=channel: cb.zoom_x1(r, c)).grid(row=row, column=3, sticky='ew')
+    button = Button(cam, text='광각 줌', image=zoom_wide_icon, compound='left')
+    button.grid(row=row, column=3, sticky='ew')
+    button.bind('<Button-1>', lambda event, r=redis, c=channel, b=button: cb.zoom_x1(r, c, b))
+
     autozoom.set(True)
     Checkbutton(cam, text='자동 줌(%)', variable=autozoom, command=lambda r=redis, c=channel, a=autozoom: cb.autozoom(r, c, a)).grid(row=row, column=4, sticky='ew')
     # Label(cam1, text='타겟 크기(%)').grid(row=row, column=5, sticky='e')
@@ -98,7 +117,10 @@ stop_icon = PhotoImage(file='{}src/controller/icons/stop.png'.format(suffix))
 row = 4
 for cam, channel in zip([cam1, cam2, cam3], ['uwtec:rear', 'uwtec:side', 'uwtec:front']):
     Label(cam, text='추적:').grid(row=row, column=0, sticky='e', padx=15, pady=(30, 30))
-    Button(cam, text='추적 중지', image= stop_icon, compound='left', command=lambda r=redis, c=channel: cb.stop_tracking(r, c)).grid(row=row, column=1, sticky='ew')
+    # Button(cam, text='추적 중지', image= stop_icon, compound='left', command=lambda r=redis, c=channel: cb.stop_tracking(r, c)).grid(row=row, column=1, sticky='ew')
+    button = Button(cam, text='추적 중지', image= stop_icon, compound='left')
+    button.grid(row=row, column=1, sticky='ew')
+    button.bind('<Button-1>', lambda event, r=redis, c=channel, b=button: cb.stop_tracking(r, c, b))
     # Button(cam, text='범위 해제', image=unlock_icon, compound='left', command=lambda r=redis, c=channel: cb.unlock(r, c)).grid(row=row, column=2, sticky='ew')
 
 ################################################################################
