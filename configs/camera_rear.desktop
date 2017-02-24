@@ -1,10 +1,10 @@
 [Desktop Entry]
-Name=Camera #2
+Name=Camera #1
 Comment=Tracker for Rear Camera
 #Exec=/home/uwtec/work/Labs/test.py
 #Exec=/home/uwtec/work/UWTracking/src/main.py -d --kcf
-#Exec=/home/uwtec/work/UWTracking/bin/tracking -d --view=rear --camera '/dev/video0' --zoom '/dev/ttyUSB0' --motor '/dev/ttyUSB1' --kcf --autozoom --gui
-Exec=/usr/local/src/UWTracking/bin/tracking -d --view=rear --camera '/dev/video0' --zoom '/dev/ttyUSB0' --motor '/dev/ttyUSB1' --kcf --autozoom --gui
+#Exec=/home/uwtec/work/UWTracking/bin/tracking -d --view=rear --camera '/dev/cam1' --zoom '/dev/zoom1' --motor '/dev/motor1' --kcf --autozoom --gui
+Exec=/usr/local/src/UWTracking/bin/tracking -d --view=rear --camera '/dev/cam1' --zoom '/dev/zoom1' --motor '/dev/motor1' --kcf --autozoom --gui
 #Path=/home/uwtec/work/UWTracking_opencv/
 Icon=/home/uwtec/.local/share/icons/hicolor/128x128/apps/camera_rear.png
 Terminal=false
