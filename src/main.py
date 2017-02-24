@@ -104,19 +104,19 @@ def onmouse(event, x, y, flags, param):
 if args["display"] is True:
     if args['view'] == 'front':
         title = '전면'
-        win_x = 0
+        win_x = 1280
         win_y = 0
         channel_name = 'uwtec:front'
         capture_name = 'front'
     elif args['view'] == 'rear':
         title = '후면'
-        win_x = 640
+        win_x = 0
         win_y = 0
         channel_name = 'uwtec:rear'
         capture_name = 'rear'
     elif args['view'] == 'side':
         title = '측면'
-        win_x = 1280
+        win_x = 640
         win_y = 0
         channel_name = 'uwtec:side'
         capture_name = 'side'
