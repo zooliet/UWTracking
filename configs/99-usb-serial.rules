@@ -1,13 +1,7 @@
-SUBSYSTEM=="video4linux", ATTRS{idVendor}=="2935", ATTRS{idProduct}=="0002", ATTRS{serial}=="A202161017474", SYMLINK+="cam1"
-SUBSYSTEM=="video4linux", ATTRS{idVendor}=="2935", ATTRS{idProduct}=="0002", ATTRS{serial}=="A202160415073", SYMLINK+="cam2"
-SUBSYSTEM=="video4linux", ATTRS{idVendor}=="2935", ATTRS{idProduct}=="0002", ATTRS{serial}=="A202160719084", SYMLINK+="cam3"
-SUBSYSTEM=="video4linux", ATTRS{idVendor}=="2935", ATTRS{idProduct}=="0002", ATTRS{serial}=="A202160719083", SYMLINK+="cam0"
-
 SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", ATTRS{serial}=="A60053GD", SYMLINK+="zoom1"
 SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", ATTRS{serial}=="AL031ZI4", SYMLINK+="zoom2"
 SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", ATTRS{serial}=="AL0320KH", SYMLINK+="zoom3"
 SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", ATTRS{serial}=="A60053VV", SYMLINK+="zoom4"
-
 SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", ATTRS{serial}=="A7012M9M", SYMLINK+="motor1"
 SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", ATTRS{serial}=="A60053GF", SYMLINK+="motor2"
 SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", ATTRS{serial}=="AL032018", SYMLINK+="motor3"

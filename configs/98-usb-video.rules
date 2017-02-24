@@ -1,0 +1,4 @@
+SUBSYSTEM=="video4linux", ATTRS{idVendor}=="2935", ATTRS{idProduct}=="0002", ATTRS{serial}=="A202161017474", SYMLINK+="cam1"
+SUBSYSTEM=="video4linux", ATTRS{idVendor}=="2935", ATTRS{idProduct}=="0002", ATTRS{serial}=="A202160415073", SYMLINK+="cam2"
+SUBSYSTEM=="video4linux", ATTRS{idVendor}=="2935", ATTRS{idProduct}=="0002", ATTRS{serial}=="A202160719084", SYMLINK+="cam3"
+SUBSYSTEM=="video4linux", ATTRS{idVendor}=="2935", ATTRS{idProduct}=="0002", ATTRS{serial}=="A202160719083", SYMLINK+="cam0"
