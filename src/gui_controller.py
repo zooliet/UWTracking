@@ -15,7 +15,7 @@ redis = redis.Redis()
 
 PROGRAM_NAME = "Tracking Controller"
 root = Tk()
-root.geometry('1920x420+0+412')
+root.geometry('1920x340+0+412')
 root.overrideredirect(1)
 root.title(PROGRAM_NAME)
 
@@ -53,13 +53,16 @@ cam3.grid(row=0, column=2, sticky='news')
 cwd = os.getcwd()
 suffix = "" if cwd.split("/")[-1] == 'UWTracking' else "/usr/local/src/UWTracking/"
 # suffix = "" if cwd.split("/")[-1] == 'UWTracking' else "/home/uwtec/work/UWTracking/"
-stop_icon = PhotoImage(file='{}src/controller/icons/stop.png'.format(suffix))
 
+################################################################################
+
+center_icon = PhotoImage(file='{}src/controller/icons/center.png'.format(suffix))
+unlock_icon = PhotoImage(file='{}src/controller/icons/unlock.png'.format(suffix))
 
 row = 2
 for cam, channel in zip([cam1, cam2, cam3], ['uwtec:rear', 'uwtec:side', 'uwtec:front']):
-    Label(cam, text='추적:').grid(row=row, column=0, sticky='e', padx=15, pady=(30, 30))
-    Button(cam, text='추적 중지', image= stop_icon, compound='left', command=lambda r=redis, c=channel: cb.stop_tracking(r, c)).grid(row=row, column=1, sticky='ew')
+    Label(cam, text='모터:').grid(row=row, column=0, sticky='e', padx=15, pady=(30, 30))
+    Button(cam, text='센터 지정', image=center_icon, compound='left', command=lambda r=redis, c=channel: cb.center(r, c)).grid(row=row, column=1, sticky='ew')
     # Button(cam, text='범위 해제', image=unlock_icon, compound='left', command=lambda r=redis, c=channel: cb.unlock(r, c)).grid(row=row, column=2, sticky='ew')
 
 ################################################################################
@@ -73,6 +76,7 @@ autozoom_2 = BooleanVar()
 autozoom_3 = BooleanVar()
 
 row = 3
+
 for cam, channel, autozoom in zip([cam1, cam2, cam3], ['uwtec:rear', 'uwtec:side', 'uwtec:front'], [autozoom_1, autozoom_2, autozoom_3]):
     # print(cam, channel, autozoom)
     Label(cam, text='줌:').grid(row=row, column=0, sticky='e', padx=15, pady=(30, 30))
@@ -87,46 +91,35 @@ for cam, channel, autozoom in zip([cam1, cam2, cam3], ['uwtec:rear', 'uwtec:side
     scale.set(30)
     scale.bind("<ButtonRelease-1>", lambda event, r=redis, c=channel, s=scale: cb.target_scale(r, c, s))
 
-################################################################################
+    ################################################################################
 
-center_icon = PhotoImage(file='{}src/controller/icons/center.png'.format(suffix))
-unlock_icon = PhotoImage(file='{}src/controller/icons/unlock.png'.format(suffix))
+stop_icon = PhotoImage(file='{}src/controller/icons/stop.png'.format(suffix))
 
 row = 4
 for cam, channel in zip([cam1, cam2, cam3], ['uwtec:rear', 'uwtec:side', 'uwtec:front']):
-    Label(cam, text='모터:').grid(row=row, column=0, sticky='e', padx=15, pady=(30, 30))
-    Button(cam, text='센터 지정', image=center_icon, compound='left', command=lambda r=redis, c=channel: cb.center(r, c)).grid(row=row, column=1, sticky='ew')
-    Button(cam, text='범위 해제', image=unlock_icon, compound='left', command=lambda r=redis, c=channel: cb.unlock(r, c)).grid(row=row, column=2, sticky='ew')
+    Label(cam, text='추적:').grid(row=row, column=0, sticky='e', padx=15, pady=(30, 30))
+    Button(cam, text='추적 중지', image= stop_icon, compound='left', command=lambda r=redis, c=channel: cb.stop_tracking(r, c)).grid(row=row, column=1, sticky='ew')
+    # Button(cam, text='범위 해제', image=unlock_icon, compound='left', command=lambda r=redis, c=channel: cb.unlock(r, c)).grid(row=row, column=2, sticky='ew')
 
 ################################################################################
 
-pause_icon = PhotoImage(file='{}src/controller/icons/pause.png'.format(suffix))
-play_icon = PhotoImage(file='{}src/controller/icons/play.png'.format(suffix))
-recording_icon = PhotoImage(file='{}src/controller/icons/recording.png'.format(suffix))
-
-row = 5
-for cam, channel in zip([cam1, cam2, cam3], ['uwtec:rear', 'uwtec:side', 'uwtec:front']):
-    Label(cam, text='플레이어:').grid(row=row, column=0, sticky='e', padx=15, pady=(30, 30))
-    Button(cam, text='영상 정지', image=pause_icon, compound='left', command=lambda r=redis, c=channel: cb.pause(r, c)).grid(row=row, column=1, sticky='ew')
-    Button(cam, text='영상 실행', image=play_icon, compound='left', command=lambda r=redis, c=channel: cb.play(r, c)).grid(row=row, column=2, sticky='ew')
-    button = Button(cam, text='영상 저장', image=recording_icon, compound='left')
-    button.grid(row=row, column=3, sticky='ew')
-    button.bind("<Button-1>", lambda event, r=redis, c=channel, b=button: cb.recording(r, c, b))
-    # Button(cam, text='추적 종료', image=stop_icon, compound='left').grid(row=row, column=3, sticky='ew')
-    # Button(cam, text='목표물 탐색', image=zoom_out_icon, compound='left').grid(row=row, column=4, sticky='ew')
+# pause_icon = PhotoImage(file='{}src/controller/icons/pause.png'.format(suffix))
+# play_icon = PhotoImage(file='{}src/controller/icons/play.png'.format(suffix))
+# recording_icon = PhotoImage(file='{}src/controller/icons/recording.png'.format(suffix))
+#
+# row = 5
+# for cam, channel in zip([cam1, cam2, cam3], ['uwtec:rear', 'uwtec:side', 'uwtec:front']):
+#     Label(cam, text='플레이어:').grid(row=row, column=0, sticky='e', padx=15, pady=(30, 30))
+#     Button(cam, text='영상 정지', image=pause_icon, compound='left', command=lambda r=redis, c=channel: cb.pause(r, c)).grid(row=row, column=1, sticky='ew')
+#     Button(cam, text='영상 실행', image=play_icon, compound='left', command=lambda r=redis, c=channel: cb.play(r, c)).grid(row=row, column=2, sticky='ew')
+#     button = Button(cam, text='영상 저장', image=recording_icon, compound='left')
+#     button.grid(row=row, column=3, sticky='ew')
+#     button.bind("<Button-1>", lambda event, r=redis, c=channel, b=button: cb.recording(r, c, b))
+#     # Button(cam, text='추적 종료', image=stop_icon, compound='left').grid(row=row, column=3, sticky='ew')
+#     # Button(cam, text='목표물 탐색', image=zoom_out_icon, compound='left').grid(row=row, column=4, sticky='ew')
 
 ################################################################################
 
-
-
-
-#
-#
-#
-# Label(cam1, text='팬 틸트:').grid(row=4, column=0, rowspan=3, sticky='ens', padx=15)
-# Label(cam2, text='팬 틸트:').grid(row=4, column=0, rowspan=3, sticky='ens', padx=15)
-# Label(cam3, text='팬 틸트:').grid(row=4, column=0, rowspan=3, sticky='ens', padx=15)
-#
 # up_icon = PhotoImage(file='src/controller/icons/up.png')
 # down_icon = PhotoImage(file='src/controller/icons/down.png')
 # left_icon = PhotoImage(file='src/controller/icons/left.png')

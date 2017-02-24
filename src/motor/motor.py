@@ -45,9 +45,9 @@ class Motor:
         self.scale = 0.3
 
         self.right_limit = 90
-        self.left_limit = -90
+        self.left_limit = -90 # -90
         self.up_limit = 30 # 90
-        self.down_limit = -90
+        self.down_limit = -30
 
         self.DEGREE_PER_PULSE = 0.00048 # 0.00048은 현재 사용 모터와 기어비로 결정되는 펄스 당 회전 각도 (degree)
         self.MANUAL_MOVING_TIME = 1 # 1 sec for default

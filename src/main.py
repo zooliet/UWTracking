@@ -1,4 +1,4 @@
-
+# -*- coding: utf-8 -*-
 
 from __future__ import print_function
 import sys
@@ -46,7 +46,7 @@ ap.add_argument("-d", "--display", action="store_true", help="show display")
 
 ap.add_argument("-m", "--motor", help = "path to motor device")
 ap.add_argument("-z", "--zoom", help = "path to zoom control port")
-ap.add_argument("-w", "--width", type=int, default=640, help="screen width in px")
+ap.add_argument("-w", "--width", type=int, default=639, help="screen width in px")
 
 ap.add_argument("--kcf", action="store_true", help="Enable KCF tracking")
 ap.add_argument("--dlib", action="store_true", help="Enable dlib tracking")
@@ -100,6 +100,12 @@ def onmouse(event, x, y, flags, param):
             # print("[MOUSE]", xmin, xmax, ymin, ymax)
             param['start'] = True
             param['dragging'] = False
+
+def tracking_processing_delay(args):
+    global tracking_is_waiting
+    tracking_is_waiting = False
+    # current_time = datetime.datetime.now().time().isoformat()
+    # print("[Tracking] End of Waiting: {}".format(current_time)) # hl1sqi
 
 if args["display"] is True:
     if args['view'] == 'front':
@@ -176,6 +182,7 @@ upscale_flag = False
 wide_zoom_flag = False
 fifo_enable_flag = False
 limit_setup_flag = False
+tracking_is_waiting = True
 
 tic = time.time()
 toc = time.time()
@@ -268,6 +275,9 @@ while True:
                         tracking_processing_flag = False
                     else:
                         tracking_processing_flag = True
+                        tracking_is_waiting = True
+                        tracking_timer = Timer(3, tracking_processing_delay, args = [False])
+                        tracking_timer.start()
 
                     # if color_tracker:
                     #     color_tracker.init(0)
@@ -286,6 +296,9 @@ while True:
                         tracking_processing_flag = False
                     else:
                         tracking_processing_flag = True
+                        tracking_is_waiting = True
+                        tracking_timer = Timer(3, tracking_processing_delay, args = [False])
+                        tracking_timer.start()
 
                 elif cmt_tracker:
                     cmt_tracker.x1 = tracking_window['x1']
@@ -299,13 +312,19 @@ while True:
                         if tracking_processing_flag == True: # reinitialize case
                             tracking_window['start'] = True # 강제로 초기화를 다시하는 효과
                         else:
-                            tracking_processing_flag = False
+                            tracking_processing_flag = True
+                            tracking_is_waiting = True
+                            tracking_timer = Timer(3, tracking_processing_delay, args = [False])
+                            tracking_timer.start()
                     else:
                         # print("[CMT] num_selected_keypoints is {}".format(cmt_tracker.num_initial_keypoints))
                         if motor_flag and limit_setup_flag is False:
                             tracking_processing_flag = False
                         else:
                             tracking_processing_flag = True
+                            tracking_is_waiting = True
+                            tracking_timer = Timer(3, tracking_processing_delay, args = [False])
+                            tracking_timer.start()
 
             elif motor_flag and ((tracking_processing_flag and motor.is_moving is False) or tracking_processing_flag is False ): #  and motor.is_moving is not True:  hl1sqi
                 centerX = (tracking_window['x1'] + tracking_window['x2']) // 2
@@ -533,7 +552,7 @@ while True:
 
             if (kcf_tracker and kcf_tracker.enable) or (dlib_tracker and dlib_tracker.enable):
                 mean_width = kcf_tracker.mean_width if kcf_tracker else dlib_tracker.mean_width
-                if autozoom_flag and zoom.is_zooming is False: # and motor.is_moving is False:
+                if autozoom_flag and zoom.is_zooming is False and tracking_is_waiting is False: # and motor.is_moving is False:
                     next_zoom = zoom.find_next_auto_zoom(current_length = mean_width)
                     if next_zoom != zoom.current_zoom:
                         # print("[ZOOM] {} to {}".format(zoom.current_zoom, next_zoom))
@@ -559,9 +578,9 @@ while True:
                 zoom_str = "x{}".format(zoom.current_zoom)
                 util.draw_str(frame_draw, (20, 20), zoom_str)
 
-            # if motor_flag:
-            #     motor_str = "({:.02f}, {:.02f})".format(motor.sum_of_x_degree, motor.sum_of_y_degree)
-            #     util.draw_str(frame_draw, (20, 340), motor_str)
+            if motor_flag:
+                motor_str = "{:.02f}, {:.02f}".format(motor.sum_of_x_degree, motor.sum_of_y_degree)
+                util.draw_str(frame_draw, (20, 340), motor_str)
 
             if kcf_tracker:
                 if tracking_processing_flag and kcf_tracker.enable:
@@ -569,6 +588,7 @@ while True:
                 else:
                     kcf_str = "Tracking: off"
                 util.draw_str(frame_draw, (WIDTH-120, 20), kcf_str)
+
 
             # if color_tracker:
             #     if color_tracker.frame_count > 1:
@@ -624,10 +644,10 @@ while True:
         elif key == ord('i'): # 'i' for 모터 위치 초기화
             if motor_flag:
                 motor.sum_of_x_degree = motor.sum_of_y_degree = 0
-                motor.right_limit = 90
-                motor.left_limit = -90
-                motor.up_limit = 30
-                motor.down_limit = -90
+                # motor.right_limit = 90
+                # motor.left_limit = -90
+                # motor.up_limit = 30
+                # motor.down_limit = -30
                 limit_setup_flag = True
         elif key == ord('w'):
             fifo_enable_flag = not fifo_enable_flag
@@ -788,7 +808,7 @@ while True:
                     # motor.right_limit = 90
                     # motor.left_limit = -90
                     # motor.up_limit = 30
-                    # motor.down_limit = -90
+                    # motor.down_limit = -30
                     limit_setup_flag = True
 
             elif redis_agent.unlock:
