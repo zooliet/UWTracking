@@ -2,3 +2,4 @@
 
 BINPATH=`dirname $0`
 /home/uwtec/.pyenv/shims/python "$BINPATH/../src/main.py" $@
+#/Users/hl1sqi/.pyenv/shims/python "$BINPATH/../src/main.py" $@

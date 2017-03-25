@@ -138,7 +138,10 @@ if args['path']:
     FRAME_HEIGHT = int(stream.get(4))
     FRAME_WIDTH = int(stream.get(3))
 else:
-    stream = cv2.VideoCapture(args['camera'])
+    if args['camera'].isdigit():
+        stream = cv2.VideoCapture(int(args['camera']))
+    else:
+        stream = cv2.VideoCapture(args['camera'])
     stream.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_WIDTH)
     stream.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
 
