@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+
+from __future__ import print_function
+import sys
+PY3 = sys.version_info[0] == 3
+if PY3:
+    xrange = range
 
 import redis
 import json
@@ -17,9 +24,10 @@ class RedisAgent(threading.Thread):
         self.zoom_in = False
         self.zoom_out = False
         self.zoom_x1 = False
+        self.zoom_x16 = False
         self.autozoom = False
-        self.target_scale = False
-        self.target_scale_value = 0
+        self.auto_scale = False
+        self.auto_scale_value = 0
 
         self.pause = False
         self.play = False
@@ -28,7 +36,6 @@ class RedisAgent(threading.Thread):
 
         self.center = False
         self.unlock = False
-
 
     def run(self):
         for item in self.pubsub.listen():
@@ -43,12 +50,11 @@ class RedisAgent(threading.Thread):
     def work(self, item):
         message = item['data'].decode()
         j = json.loads(message)
+
         if j['action'] == 'quit':
             self.quit = True
-
         elif j['action'] == 'stop_tracking':
             self.stop_tracking = True
-
         elif j['action'] == 'zoom_in':
             self.zoom_in = True
         elif j['action'] == 'zoom_out':
@@ -57,15 +63,10 @@ class RedisAgent(threading.Thread):
             self.zoom_x1 = True
         elif j['action'] == 'autozoom':
             self.autozoom = True
-            if j['value']:
-                self.autozoom_enable = True
-            else:
-                self.autozoom_enable = False
-        elif j['action'] == 'target_scale':
-            self.target_scale = True
-            self.target_scale_value = int(j['value']) * 0.01
-
-
+            self.autozoom_enable = True if j['value'] else False
+        elif j['action'] == 'auto_scale':
+            self.auto_scale = True
+            self.auto_scale_value = int(j['value']) * 0.01
         elif j['action'] == 'pause':
             self.pause = True
         elif j['action'] == 'play':
@@ -74,7 +75,6 @@ class RedisAgent(threading.Thread):
             self.start_recording = True
         elif j['action'] == 'stop_recording':
             self.stop_recording = True
-
         elif j['action'] == 'center':
             self.center = True
         elif j['action'] == 'unlock':
@@ -85,12 +85,12 @@ class RedisAgent(threading.Thread):
     def stop(self, channel):
         self.redis.publish(channel, 'KILL')
 
-    def command(self, channel, j):
-        jstr = json.dumps(j)
-        self.redis.publish(channel, jstr)
-
     def test(self, channel):
         current_time = datetime.datetime.now().time().isoformat()
         j = {'action': 'time', 'value': current_time}
+        jstr = json.dumps(j)
+        self.redis.publish(channel, jstr)
+
+    def command(self, channel, j):
         jstr = json.dumps(j)
         self.redis.publish(channel, jstr)

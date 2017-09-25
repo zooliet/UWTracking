@@ -1,3 +1,11 @@
+# -*- coding: utf-8 -*-
+
+from __future__ import print_function
+import sys
+PY3 = sys.version_info[0] == 3
+if PY3:
+    xrange = range
+
 import cv2
 import numpy as np
 

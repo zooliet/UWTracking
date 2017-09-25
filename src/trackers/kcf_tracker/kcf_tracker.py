@@ -1,12 +1,14 @@
-import numpy as np
-import cv2
-
+# -*- coding: utf-8 -*-
+from __future__ import print_function
 import sys
 PY3 = sys.version_info[0] == 3
 if PY3:
-  xrange = range
+    xrange = range
 
-from . import fhog
+import numpy as np
+import cv2
+
+from trackers.kcf_tracker import fhog
 
 # ffttools
 def fftd(img, backwards=False):

@@ -2,9 +2,9 @@
 Name=Camera #3
 Comment=Tracker for Front Camera
 #Exec=/home/uwtec/work/Labs/test.py
-#Exec=/home/uwtec/work/UWTracking/src/main.py -d --kcf
-#Exec=/home/uwtec/work/UWTracking/bin/tracking -d --view=front --camera '/dev/cam3' --zoom '/dev/zoom3' --motor '/dev/motor3' --kcf --autozoom --gui
-Exec=/usr/local/src/UWTracking/bin/tracking -d --view=front --camera '/dev/cam3' --zoom '/dev/zoom3' --motor '/dev/motor3' --kcf --autozoom --gui
+#Exec=/home/uwtec/work/UWTracking/src/main.py --kcf
+#Exec=/home/uwtec/work/UWTracking/bin/tracking --view=front --camera '/dev/cam3' --zoom '/dev/zoom3' --motor '/dev/motor3' --kcf
+Exec=/usr/local/src/UWTracking/bin/tracking --view=front --camera '/dev/cam3' --zoom '/dev/zoom3' --motor '/dev/motor3' --kcf
 #Path=/home/uwtec/work/UWTracking_opencv/
 Icon=/home/uwtec/.local/share/icons/hicolor/128x128/apps/camera_front.png
 Terminal=false

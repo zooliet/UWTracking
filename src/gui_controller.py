@@ -1,16 +1,137 @@
+# -*- coding: utf-8 -*-
 
+from __future__ import print_function
+import sys
+PY3 = sys.version_info[0] == 3
+if PY3:
+    xrange = range
 
 import os
+import redis
+import json
+import re
+
 from tkinter import *
 import tkinter.messagebox
 import tkinter.filedialog
 import tkinter.ttk
 
-import redis
-import json
+class GuiCallBacks:
+    def exit_app(self, redis, root, event=None):
+        root.destroy()
+        j = {'action': 'quit'}
+        jstr = json.dumps(j)
 
-from controller import callbacks as cb
+        for channel in ['uwtec:front', 'uwtec:rear', 'uwtec:side']:
+            redis.publish(channel, jstr)
+        # if tkinter.messagebox.askokcancel("종료?", "프로그램을 종료합니다."):
+        #     root.destroy()
 
+    ################################################################################
+
+    # def stop_tracking(redis, channel, event=None):
+    def stop_tracking(self, redis, channel, button, event=None):
+        button.config(state='normal', background='orange')
+        button.after(600, lambda: button.config(state='normal', background='#d9d9d9'))
+
+        j = {'action': 'stop_tracking'}
+        jstr = json.dumps(j)
+        redis.publish(channel, jstr)
+
+    ################################################################################
+
+    # def zoom_in(redis, channel, event=None):
+    def zoom_in(self, redis, channel, button, event=None):
+        button.config(state='normal', background='orange')
+        button.after(600, lambda: button.config(state='normal', background='#d9d9d9'))
+
+        j = {'action': 'zoom_in'}
+        jstr = json.dumps(j)
+        redis.publish(channel, jstr)
+
+    # def zoom_out(redis, channel, event=None):
+    def zoom_out(self, redis, channel, button, event=None):
+        button.config(state='normal', background='orange')
+        button.after(600, lambda: button.config(state='normal', background='#d9d9d9'))
+
+        j = {'action': 'zoom_out'}
+        jstr = json.dumps(j)
+        redis.publish(channel, jstr)
+
+    # def zoom_x1(redis, channel, event=None):
+    def zoom_x1(self, redis, channel, button, event=None):
+        button.config(state='normal', background='orange')
+        button.after(600, lambda: button.config(state='normal', background='#d9d9d9'))
+
+        j = {'action': 'zoom_x1'}
+        jstr = json.dumps(j)
+        redis.publish(channel, jstr)
+
+    def autozoom(self, redis, channel, autozoom, event=None):
+        if autozoom.get():
+            j = {'action': 'autozoom', 'value': True}
+        else:
+            j = {'action': 'autozoom', 'value': False}
+        jstr = json.dumps(j)
+        redis.publish(channel, jstr)
+
+    # def target_scale(redis, channel, scale, event=None):
+    def target_scale(self, redis, channel, scale, event=None):
+        value = scale.get()
+        j = {'action': 'target_scale', 'value': value}
+        jstr = json.dumps(j)
+        # print(jstr)
+        redis.publish(channel, jstr)
+
+    ################################################################################
+
+    def pause(self, redis, channel, event=None):
+        j = {'action': 'pause'}
+        jstr = json.dumps(j)
+        redis.publish(channel, jstr)
+
+    def play(self, redis, channel, event=None):
+        j = {'action': 'play'}
+        jstr = json.dumps(j)
+        redis.publish(channel, jstr)
+
+    def recording(self, redis, channel, button, event=None):
+        if button.config('background')[-1] == '#d9d9d9':
+            button.config(state='normal', relief='raised', background='orange')
+            j = {'action': 'start_recording'}
+        else:
+            button.config(background='#d9d9d9')
+            # button.bind('<Enter>', lambda event, b=button: b.config(background='#d9d9d9'))
+            j = {'action': 'stop_recording'}
+
+        jstr = json.dumps(j)
+        redis.publish(channel, jstr)
+
+    ################################################################################
+
+    # def center(redis, channel, event=None):
+    def center(self, redis, channel, button, event=None):
+        button.config(state='normal', background='orange')
+        button.after(600, lambda: button.config(state='normal', background='#d9d9d9'))
+
+        j = {'action': 'center'}
+        jstr = json.dumps(j)
+        # print(jstr)
+        redis.publish(channel, jstr)
+
+    # def unlock(redis, channel, event=None):
+    def unlock(self, redis, channel, button, event=None):
+        button.config(state='normal', background='orange')
+        button.after(600, lambda: button.config(state='normal', background='#d9d9d9'))
+
+        j = {'action': 'unlock'}
+        jstr = json.dumps(j)
+        redis.publish(channel, jstr)
+
+    ################################################################################
+
+
+cb = GuiCallBacks()
 redis = redis.Redis()
 
 PROGRAM_NAME = "Tracking Controller"
@@ -51,13 +172,24 @@ cam3.grid(row=0, column=2, sticky='news')
 ################################################################################
 
 cwd = os.getcwd()
-suffix = "" if cwd.split("/")[-1] == 'UWTracking' else "/usr/local/src/UWTracking/"
+cwds = cwd.split("/")
+pattern = re.compile('uwtracking', re.IGNORECASE)
+
+
+if cwds[-1] == 'src':
+    suffix =  "/".join(cwds[0:-1]) + "/"
+elif (bool(re.match(pattern, cwds[-1]))):
+    suffix =  cwd + "/"
+else:
+    suffix = "/usr/local/src/UWTracking/"
+
+# suffix = "" if cwd.split("/")[-1] == 'UWTracking' else "/usr/local/src/UWTracking/"
 # suffix = "" if cwd.split("/")[-1] == 'UWTracking' else "/home/uwtec/work/UWTracking/"
 
 ################################################################################
 
-center_icon = PhotoImage(file='{}src/controller/icons/center.png'.format(suffix))
-unlock_icon = PhotoImage(file='{}src/controller/icons/unlock.png'.format(suffix))
+center_icon = PhotoImage(file='{}src/icons/center.png'.format(suffix))
+unlock_icon = PhotoImage(file='{}src/icons/unlock.png'.format(suffix))
 
 row = 2
 for cam, channel in zip([cam1, cam2, cam3], ['uwtec:rear', 'uwtec:side', 'uwtec:front']):
@@ -74,9 +206,9 @@ for cam, channel in zip([cam1, cam2, cam3], ['uwtec:rear', 'uwtec:side', 'uwtec:
 
 ################################################################################
 
-zoom_in_icon = PhotoImage(file='{}src/controller/icons/zoom_in.png'.format(suffix))
-zoom_out_icon = PhotoImage(file='{}src/controller/icons/zoom_out.png'.format(suffix))
-zoom_wide_icon = PhotoImage(file='{}src/controller/icons/zoom_wide.png'.format(suffix))
+zoom_in_icon = PhotoImage(file='{}src/icons/zoom_in.png'.format(suffix))
+zoom_out_icon = PhotoImage(file='{}src/icons/zoom_out.png'.format(suffix))
+zoom_wide_icon = PhotoImage(file='{}src/icons/zoom_wide.png'.format(suffix))
 
 autozoom_1 = BooleanVar()
 autozoom_2 = BooleanVar()
@@ -102,7 +234,7 @@ for cam, channel, autozoom in zip([cam1, cam2, cam3], ['uwtec:rear', 'uwtec:side
     button.grid(row=row, column=3, sticky='ew')
     button.bind('<Button-1>', lambda event, r=redis, c=channel, b=button: cb.zoom_x1(r, c, b))
 
-    autozoom.set(True)
+    autozoom.set(False)
     Checkbutton(cam, text='자동 줌(%)', variable=autozoom, command=lambda r=redis, c=channel, a=autozoom: cb.autozoom(r, c, a)).grid(row=row, column=4, sticky='ew')
     # Label(cam1, text='타겟 크기(%)').grid(row=row, column=5, sticky='e')
     scale = Scale(cam, from_=20, to=40, label='', orient=HORIZONTAL)
@@ -112,7 +244,7 @@ for cam, channel, autozoom in zip([cam1, cam2, cam3], ['uwtec:rear', 'uwtec:side
 
     ################################################################################
 
-stop_icon = PhotoImage(file='{}src/controller/icons/stop.png'.format(suffix))
+stop_icon = PhotoImage(file='{}src/icons/stop.png'.format(suffix))
 
 row = 4
 for cam, channel in zip([cam1, cam2, cam3], ['uwtec:rear', 'uwtec:side', 'uwtec:front']):
@@ -125,9 +257,9 @@ for cam, channel in zip([cam1, cam2, cam3], ['uwtec:rear', 'uwtec:side', 'uwtec:
 
 ################################################################################
 
-# pause_icon = PhotoImage(file='{}src/controller/icons/pause.png'.format(suffix))
-# play_icon = PhotoImage(file='{}src/controller/icons/play.png'.format(suffix))
-# recording_icon = PhotoImage(file='{}src/controller/icons/recording.png'.format(suffix))
+# pause_icon = PhotoImage(file='{}src/icons/pause.png'.format(suffix))
+# play_icon = PhotoImage(file='{}src/icons/play.png'.format(suffix))
+# recording_icon = PhotoImage(file='{}src/icons/recording.png'.format(suffix))
 #
 # row = 5
 # for cam, channel in zip([cam1, cam2, cam3], ['uwtec:rear', 'uwtec:side', 'uwtec:front']):
@@ -142,10 +274,10 @@ for cam, channel in zip([cam1, cam2, cam3], ['uwtec:rear', 'uwtec:side', 'uwtec:
 
 ################################################################################
 
-# up_icon = PhotoImage(file='src/controller/icons/up.png')
-# down_icon = PhotoImage(file='src/controller/icons/down.png')
-# left_icon = PhotoImage(file='src/controller/icons/left.png')
-# right_icon = PhotoImage(file='src/controller/icons/right.png')
+# up_icon = PhotoImage(file='src/icons/up.png')
+# down_icon = PhotoImage(file='src/icons/down.png')
+# left_icon = PhotoImage(file='src/icons/left.png')
+# right_icon = PhotoImage(file='src/icons/right.png')
 #
 # cam1_pan_tilt = Frame(cam1)
 # cam1_pan_tilt.grid(row=4, column=1, columnspan=2, pady=(15, 15))
