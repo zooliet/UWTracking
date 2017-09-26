@@ -253,10 +253,10 @@ while True:
     cv2.line(frame_draw, (cfg['HALF_WIDTH'], 0), (cfg['HALF_WIDTH'], cfg['HEIGHT']), (200, 200, 200), 0)
     cv2.line(frame_draw, (0, cfg['HALF_HEIGHT']), (cfg['WIDTH'], cfg['HALF_HEIGHT']), (200, 200, 200), 0)
 
-    # cv2.line(frame_draw, (int(cfg['WIDTH']*1/4), 0), (int(cfg['WIDTH']*1/4), cfg['HEIGHT']), (0, 0, 200), 0)
-    # cv2.line(frame_draw, (int(cfg['WIDTH']*3/4), 0), (int(cfg['WIDTH']*3/4), cfg['HEIGHT']), (0, 0, 200), 0)
-    # cv2.line(frame_draw, (0, int(cfg['HEIGHT']*1/4)), (cfg['WIDTH'], int(cfg['HEIGHT']*1/4)), (0, 0, 200), 0)
-    # cv2.line(frame_draw, (0, int(cfg['HEIGHT']*3/4)), (cfg['WIDTH'], int(cfg['HEIGHT']*3/4)), (0, 0, 200), 0)
+    cv2.line(frame_draw, (int(cfg['WIDTH']*1/4), 0), (int(cfg['WIDTH']*1/4), cfg['HEIGHT']), (0, 0, 200), 0)
+    cv2.line(frame_draw, (int(cfg['WIDTH']*3/4), 0), (int(cfg['WIDTH']*3/4), cfg['HEIGHT']), (0, 0, 200), 0)
+    cv2.line(frame_draw, (0, int(cfg['HEIGHT']*1/4)), (cfg['WIDTH'], int(cfg['HEIGHT']*1/4)), (0, 0, 200), 0)
+    cv2.line(frame_draw, (0, int(cfg['HEIGHT']*3/4)), (cfg['WIDTH'], int(cfg['HEIGHT']*3/4)), (0, 0, 200), 0)
 
     if pause_flag is False:
         zoom_str = "x{}".format(zoom.current_zoom)
