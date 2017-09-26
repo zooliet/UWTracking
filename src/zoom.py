@@ -21,7 +21,7 @@ class Zoom:
 
         self.WIDTH = screen_width
 
-        self.FOCUSING_DURATION = 2.3 # sec
+        self.FOCUSING_DURATION = 1.0 # 2.3 # sec
 
         self.VISCA_ZOOMS = {
             1: 0x0000,  1.4: 0x0ccd, 1.7: 0x1333,

@@ -75,10 +75,10 @@ class GuiCallBacks:
         jstr = json.dumps(j)
         redis.publish(channel, jstr)
 
-    # def target_scale(redis, channel, scale, event=None):
-    def target_scale(self, redis, channel, scale, event=None):
+    # def auto_scale(redis, channel, scale, event=None):
+    def auto_scale(self, redis, channel, scale, event=None):
         value = scale.get()
-        j = {'action': 'target_scale', 'value': value}
+        j = {'action': 'auto_scale', 'value': value}
         jstr = json.dumps(j)
         # print(jstr)
         redis.publish(channel, jstr)
@@ -240,7 +240,7 @@ for cam, channel, autozoom in zip([cam1, cam2, cam3], ['uwtec:rear', 'uwtec:side
     scale = Scale(cam, from_=20, to=40, label='', orient=HORIZONTAL)
     scale.grid(row=row, column=5, sticky='ew', padx=(15,0), pady=(15, 15))
     scale.set(30)
-    scale.bind("<ButtonRelease-1>", lambda event, r=redis, c=channel, s=scale: cb.target_scale(r, c, s))
+    scale.bind("<ButtonRelease-1>", lambda event, r=redis, c=channel, s=scale: cb.auto_scale(r, c, s))
 
     ################################################################################
 
