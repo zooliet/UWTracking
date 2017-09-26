@@ -52,7 +52,7 @@ class Zoom:
             16: (3.95, 2.23),
         }
 
-        self.auto_scale = 0.3
+        self.auto_scale = 0.4
 
         self.is_zooming = False
         self.current_zoom = 1

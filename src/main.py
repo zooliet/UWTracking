@@ -262,18 +262,18 @@ while True:
         zoom_str = "x{}".format(zoom.current_zoom)
         if autozoom_flag:
             zoom_str += " (Auto)"
-            util.draw_str(frame_draw, (cfg['WIDTH']-100, cfg['HEIGHT'] - 20), zoom_str)
+            util.draw_str(frame_draw, (cfg['WIDTH']-100, cfg['HEIGHT'] - 20), zoom_str, (0, 0, 200))
         else:
-            util.draw_str(frame_draw, (cfg['WIDTH']-50, cfg['HEIGHT'] - 20), zoom_str)
+            util.draw_str(frame_draw, (cfg['WIDTH']-50, cfg['HEIGHT'] - 20), zoom_str, (0, 0, 200))
 
         position_str = "{:.02f}, {:.02f}".format(motor.sum_of_x_degree, motor.sum_of_y_degree)
-        util.draw_str(frame_draw, (10, cfg['HEIGHT'] - 30), position_str)
+        util.draw_str(frame_draw, (10, cfg['HEIGHT'] - 30), position_str, (0, 0, 200))
 
         if tracking_processing_flag and kcf_tracker.enable:
             kcf_str = "Tracking: on"
         else:
             kcf_str = "Tracking: off"
-        util.draw_str(frame_draw, (cfg['WIDTH']-120, 20), kcf_str)
+        util.draw_str(frame_draw, (cfg['WIDTH']-120, 20), kcf_str, (0, 0, 200))
 
         cv2.imshow(cfg['TITLE'], frame_draw)
         cv2.moveWindow(cfg['TITLE'], cfg['WIN_X'], cfg['WIN_Y'])
