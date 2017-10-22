@@ -20,6 +20,7 @@ class Zoom:
             self.port = None
 
         self.WIDTH = screen_width
+        self.HEIGHT = int(screen_width * 9 / 16)
 
         self.FOCUSING_DURATION = 1.0 # 2.3 # sec
 
@@ -144,19 +145,23 @@ class Zoom:
         zoom_out_idx = idx - 1 if idx > 0 else 0
 
         normalized_length = list(map(lambda zoom: self.FOVS[1][0]/self.FOVS[zoom][0], zooms))
+        normalized_height = list(map(lambda zoom: self.FOVS[1][1]/self.FOVS[zoom][1], zooms))
         # print("[ZOOM] Ratio in length", list(map(lambda l: round(l, 2), normalized_length)))
 
         zoom_in_length = width * (normalized_length[zoom_in_idx]/normalized_length[idx])
         zoom_out_length = width * (normalized_length[zoom_out_idx]/normalized_length[idx])
         max_length = self.WIDTH * self.auto_scale
+
+        zoom_in_height = height * (normalized_height[zoom_in_idx]/normalized_height[idx])
+
         # print("[ZOOM] Current: {0:.0f}/{3}, Zoom in: {1:.0f}/{3}, Zoom out: {2:.0f}/{3}".format(width, zoom_in_length, zoom_out_length, self.WIDTH))
 
+        next_zoom = self.current_zoom
         if width >= max_length * 1.4:
             next_zoom = zooms[zoom_out_idx]
-        elif width > 0 and zoom_in_length < max_length * 1.2: # 줌인할 길이가 상한을 넘지 않은 경우에는 줌인
-            next_zoom = zooms[zoom_in_idx]
-        else:
-            next_zoom = self.current_zoom
+        elif width > 0 and zoom_in_length < max_length * 1.2: # 줌인할 길이가 상한을 넘지 않은 경우
+            if zoom_in_height < self.HEIGHT * 0.9: # 줌인할 높이가 높이 상한을 넘지 않을 경우
+                next_zoom = zooms[zoom_in_idx]
 
         return next_zoom
 
