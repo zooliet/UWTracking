@@ -293,9 +293,15 @@ class KCFTracker:
         self._tmpl = (1-train_interp_factor)*self._tmpl + train_interp_factor*x
         self._alphaf = (1-train_interp_factor)*self._alphaf + train_interp_factor*alphaf
 
-    def init(self, image):
+    def init(self, image, window=None):
 
         self.force_init_flag = False
+
+        if window:
+            self.x1 = window['x1']
+            self.x2 = window['x2']
+            self.y1 = window['y1']
+            self.y2 = window['y2']
 
         roi = [self.x1, self.y1, self.x2-self.x1, self.y2-self.y1]
         self._roi = list(map(float, roi))

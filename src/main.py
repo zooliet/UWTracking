@@ -21,16 +21,15 @@ import numpy as np
 import imutils
 
 from trackers.kcf_tracker import KCFTracker
+from trackers.dlib_tracker import DLIBTracker
 
 from motor import Motor
 from zoom import Zoom
 from utils import util
 from redis_agent import RedisAgent
 
-# from trackers.kcf.kcf_tracker import KCFTracker
 # from trackers.color.color_tracker import ColorTracker
 # from trackers.motion.motion_tracker import MotionTracker
-# from trackers.dlib.dlib_tracker import DLIBTracker
 # from trackers.cmt.cmt_tracker import CMTTracker
 # from utils import common
 
@@ -124,6 +123,11 @@ if args['kcf'] is True:
 else:
     kcf_tracker = None
 
+if args['dlib'] is True:
+    dlib_tracker = DLIBTracker()
+else:
+    dlib_tracker = None
+
 ################################################################################
 
 capture = None
@@ -160,18 +164,14 @@ while True:
                 selected_height = tracking_window['y2'] - tracking_window['y1']
 
                 if kcf_tracker:
-                    kcf_tracker.x1 = tracking_window['x1']
-                    kcf_tracker.y1 = tracking_window['y1']
-                    kcf_tracker.x2 = tracking_window['x2']
-                    kcf_tracker.y2 = tracking_window['y2']
-
                     #if you use hog feature, there will be a short pause after you draw a first boundingbox, that is due to the use of Numba.
-                    kcf_tracker.init(frame)
-
+                    kcf_tracker.init(frame, tracking_window)
                     tracking_processing_flag = True
-                    # tracking_is_waiting = True
-                    # tracking_timer = Timer(3, tracking_processing_delay, args = [False])
-                    # tracking_timer.start()
+
+                if dlib_tracker:
+                    dlib_tracker.init(frame, tracking_window)
+                    tracking_processing_flag = True
+
             else: # tracking_processing_flag is False:
                 centerX = round((tracking_window['x1'] + tracking_window['x2']) / 2)
                 centerY = round((tracking_window['y1'] + tracking_window['y2']) / 2)
@@ -194,7 +194,6 @@ while True:
                 if kcf_tracker.force_init_flag is True:
                     print('[KCF] Force init')
                     kcf_tracker.init(frame)
-                    kcf_tracker.force_init_flag = False
 
                 elif kcf_tracker.enable:
                     boundingbox, loc = kcf_tracker.update(frame)
@@ -231,6 +230,45 @@ while True:
 
                 else:
                     pass
+
+            if dlib_tracker:
+                if dlib_tracker.force_init_flag is True:
+                    print('[DLIB] Force init')
+                    dlib_tracker.init(frame)
+                elif dlib_tracker.enable:
+                    score, boundingbox = dlib_tracker.update(frame)
+                    boundingbox = list(map(int, boundingbox))
+                    # print('[DLIB] score:', score)
+
+                    if score < 1: # ???:
+                        print('[DLIB] Disabled:score({:.02f}) is too low'.format(dlib.score))
+                        dlib.enable = False
+                        zoom.zoom_to(1)
+                    else:
+                        dlib_tracker.x1 = boundingbox[0]
+                        dlib_tracker.y1 = boundingbox[1]
+                        dlib_tracker.x2 = boundingbox[2]
+                        dlib_tracker.y2 = boundingbox[3]
+                        dlib_tracker.center = (round((dlib_tracker.x1 + dlib_tracker.x2) / 2), round((dlib_tracker.y1 + dlib_tracker.y2) / 2))
+
+                        # dlib_tracker.prev_widths = np.append(dlib_tracker.prev_widths, boundingbox[2])
+                        # dlib_tracker.prev_heights = np.append(dlib_tracker.prev_heights, boundingbox[3])
+                        #
+                        # if dlib_tracker.prev_widths.shape[0] > dlib_tracker.PREV_HISTORY_SIZE: # 10
+                        #     dlib_tracker.prev_widths = np.delete(dlib_tracker.prev_widths, (0), axis=0)
+                        #     dlib_tracker.prev_heights = np.delete(dlib_tracker.prev_heights, (0), axis=0)
+                        #
+                        # dlib_tracker.mean_width = np.round(np.mean(dlib_tracker.prev_widths)).astype(np.int)
+                        # dlib_tracker.mean_height = np.round(np.mean(dlib_tracker.prev_heights)).astype(np.int)
+
+                        # str = "{}x{}({}x{})".format(dlib_tracker.mean_width, dlib_tracker.mean_height, selected_width, selected_height)
+                        # util.draw_str(frame_draw, (20, 20), str)
+                        cv2.rectangle(frame_draw,(dlib_tracker.x1,dlib_tracker.y1), (dlib_tracker.x2,dlib_tracker.y2), (255,0,0), 1)
+                        cv2.drawMarker(frame_draw, tuple(dlib_tracker.center), (255,0,0))
+                        # request_to_track_flag = True
+                else:
+                    pass
+
 
             if request_to_track_flag is True:
                 request_to_track_flag = False

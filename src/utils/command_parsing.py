@@ -15,7 +15,7 @@ def parsing():
     ap.add_argument("-w", "--width", type=int, default=640, help="screen width in px")
 
     ap.add_argument("--kcf", action="store_true", help="Enable KCF tracking")
-    # ap.add_argument("--dlib", action="store_true", help="Enable dlib tracking")
+    ap.add_argument("--dlib", action="store_true", help="Enable dlib tracking")
     # ap.add_argument("--cmt", action="store_true", help="Enable CMT tracking")
     #
     # ap.add_argument("--color", action="store_true", help="Enable color subtracking")
