@@ -118,15 +118,17 @@ prev_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
 ################################################################################
 
+kcf_tracker = None
+sub_tracker = None
+dlib_tracker = None
+
 if args['kcf'] is True:
     kcf_tracker = KCFTracker(True, False, True) # hog, fixed_window, multiscale
-else:
-    kcf_tracker = None
+    if args['sub'] is True:
+        sub_tracker = KCFTracker(True, False, True)
 
 if args['dlib'] is True:
     dlib_tracker = DLIBTracker()
-else:
-    dlib_tracker = None
 
 ################################################################################
 
@@ -138,6 +140,7 @@ fifo_enable_flag = False
 show_lap_time_flag = False
 request_to_track_flag = False
 autozoom_flag = args['autozoom']
+test_flag = False
 
 tic = time.time()
 toc = time.time()
@@ -167,6 +170,10 @@ while True:
                     #if you use hog feature, there will be a short pause after you draw a first boundingbox, that is due to the use of Numba.
                     kcf_tracker.init(frame, tracking_window)
                     tracking_processing_flag = True
+                    if sub_tracker:
+                        resized_window = util.resize_selection(tracking_window, 0.8)
+                        # print(tracking_window, resized_window)
+                        sub_tracker.init(frame, resized_window)
 
                 if dlib_tracker:
                     dlib_tracker.init(frame, tracking_window)
@@ -194,10 +201,17 @@ while True:
                 if kcf_tracker.force_init_flag is True:
                     print('[KCF] Force init')
                     kcf_tracker.init(frame)
+                    # if sub_tracker:
+                    #     print('[Sub] Force init')
+                    #     sub_tracker.init(frame)
 
                 elif kcf_tracker.enable:
                     boundingbox, loc = kcf_tracker.update(frame)
                     boundingbox = list(map(int, boundingbox))
+
+                    if sub_tracker:
+                        sub_boundingbox, sub_loc = sub_tracker.update(frame)
+                        sub_boundingbox = list(map(int, sub_boundingbox))
 
                     # 이탈 정도(0.25), motion_tracker.interval, waitKey(x) 조정 필요
                     if kcf_tracker.peak_value < 0.1: # 0.25:
@@ -206,27 +220,28 @@ while True:
                         zoom.zoom_to(1)
 
                     else:
-                        kcf_tracker.x1 = boundingbox[0]
-                        kcf_tracker.y1 = boundingbox[1]
-                        kcf_tracker.x2 = boundingbox[0] + boundingbox[2]
-                        kcf_tracker.y2 = boundingbox[1] + boundingbox[3]
-                        kcf_tracker.center = (round((kcf_tracker.x1 + kcf_tracker.x2) / 2), round((kcf_tracker.y1 + kcf_tracker.y2) / 2))
-
-                        kcf_tracker.prev_widths = np.append(kcf_tracker.prev_widths, boundingbox[2])
-                        kcf_tracker.prev_heights = np.append(kcf_tracker.prev_heights, boundingbox[3])
-
-                        if kcf_tracker.prev_widths.shape[0] > kcf_tracker.PREV_HISTORY_SIZE: # 10
-                            kcf_tracker.prev_widths = np.delete(kcf_tracker.prev_widths, (0), axis=0)
-                            kcf_tracker.prev_heights = np.delete(kcf_tracker.prev_heights, (0), axis=0)
-
-                        kcf_tracker.mean_width = np.round(np.mean(kcf_tracker.prev_widths)).astype(np.int)
-                        kcf_tracker.mean_height = np.round(np.mean(kcf_tracker.prev_heights)).astype(np.int)
-
+                        kcf_tracker.update_location(boundingbox)
                         # str = "{}x{}({}x{})".format(kcf_tracker.mean_width, kcf_tracker.mean_height, selected_width, selected_height)
                         # util.draw_str(frame_draw, (20, 20), str)
                         cv2.rectangle(frame_draw,(kcf_tracker.x1,kcf_tracker.y1), (kcf_tracker.x2,kcf_tracker.y2), (0,255,0), 1)
                         cv2.drawMarker(frame_draw, tuple(kcf_tracker.center), (0,255,0))
                         request_to_track_flag = True
+
+                        # if something happened...
+                        # if test_flag is True:
+                        #     test_flag = False
+                        if sub_tracker:
+                            sub_tracker.update_location(sub_boundingbox)
+                            cv2.rectangle(frame_draw,(sub_tracker.x1,sub_tracker.y1), (sub_tracker.x2,sub_tracker.y2), (255,255,0), 1)
+                            cv2.drawMarker(frame_draw, tuple(sub_tracker.center), (255,255,0))
+                            if (kcf_tracker.mean_area > sub_tracker.mean_area / 0.49) or (kcf_tracker.mean_area < sub_tracker.mean_area / 0.81):
+                                resized_window = util.resize_selection({'x1': sub_tracker.x1, 'y1': sub_tracker.y1, 'x2': sub_tracker.x2, 'y2': sub_tracker.y2}, 1/0.8)
+                                kcf_tracker.x1 = resized_window['x1']
+                                kcf_tracker.y1 = resized_window['y1']
+                                kcf_tracker.x2 = resized_window['x2']
+                                kcf_tracker.y2 = resized_window['y2']
+                                kcf_tracker.force_init_flag = True
+                                request_to_track_flag = False # Not sure
 
                 else:
                     pass
@@ -251,24 +266,11 @@ while True:
                         dlib_tracker.y2 = boundingbox[3]
                         dlib_tracker.center = (round((dlib_tracker.x1 + dlib_tracker.x2) / 2), round((dlib_tracker.y1 + dlib_tracker.y2) / 2))
 
-                        # dlib_tracker.prev_widths = np.append(dlib_tracker.prev_widths, boundingbox[2])
-                        # dlib_tracker.prev_heights = np.append(dlib_tracker.prev_heights, boundingbox[3])
-                        #
-                        # if dlib_tracker.prev_widths.shape[0] > dlib_tracker.PREV_HISTORY_SIZE: # 10
-                        #     dlib_tracker.prev_widths = np.delete(dlib_tracker.prev_widths, (0), axis=0)
-                        #     dlib_tracker.prev_heights = np.delete(dlib_tracker.prev_heights, (0), axis=0)
-                        #
-                        # dlib_tracker.mean_width = np.round(np.mean(dlib_tracker.prev_widths)).astype(np.int)
-                        # dlib_tracker.mean_height = np.round(np.mean(dlib_tracker.prev_heights)).astype(np.int)
-
-                        # str = "{}x{}({}x{})".format(dlib_tracker.mean_width, dlib_tracker.mean_height, selected_width, selected_height)
-                        # util.draw_str(frame_draw, (20, 20), str)
                         cv2.rectangle(frame_draw,(dlib_tracker.x1,dlib_tracker.y1), (dlib_tracker.x2,dlib_tracker.y2), (255,0,0), 1)
                         cv2.drawMarker(frame_draw, tuple(dlib_tracker.center), (255,0,0))
                         # request_to_track_flag = True
                 else:
                     pass
-
 
             if request_to_track_flag is True:
                 request_to_track_flag = False
@@ -328,7 +330,8 @@ while True:
     if key == 27 or key == ord('q') or redis_agent.quit:  # ESC or 'q' for 종료
         redis_agent.stop(cfg['CHANNEL_NAME'])
         break
-
+    elif key == ord('x'):
+        test_flag = True
     elif key == ord(' '): # SPACE for 화면 정지
         pause_flag = not pause_flag
     elif redis_agent.pause:

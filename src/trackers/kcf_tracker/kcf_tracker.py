@@ -329,9 +329,6 @@ class KCFTracker:
 
         self.enable = True
 
-        # self.locations = np.empty((0,2))
-        # self.dir_x_count = 0
-        # self.dir_y_count = 0
 
     def update(self, image):
         if(self._roi[0]+self._roi[2] <= 0):  self._roi[0] = -self._roi[2] + 1
@@ -429,3 +426,21 @@ class KCFTracker:
         # hl1sqi
         self.peak_value = peak_value
         return self._roi, loc
+
+    def update_location(self, boundingbox):
+        self.x1 = boundingbox[0]
+        self.y1 = boundingbox[1]
+        self.x2 = boundingbox[0] + boundingbox[2]
+        self.y2 = boundingbox[1] + boundingbox[3]
+        self.center = (round((self.x1 + self.x2) / 2), round((self.y1 + self.y2) / 2))
+
+        self.prev_widths = np.append(self.prev_widths, boundingbox[2])
+        self.prev_heights = np.append(self.prev_heights, boundingbox[3])
+
+        if self.prev_widths.shape[0] > self.PREV_HISTORY_SIZE: # 10
+            self.prev_widths = np.delete(self.prev_widths, (0), axis=0)
+            self.prev_heights = np.delete(self.prev_heights, (0), axis=0)
+
+        self.mean_width = np.round(np.mean(self.prev_widths)).astype(np.int)
+        self.mean_height = np.round(np.mean(self.prev_heights)).astype(np.int)
+        self.mean_area = self.mean_width * self.mean_height

@@ -9,6 +9,26 @@ if PY3:
 import cv2
 import numpy as np
 
+
+def resize_selection(window, ratio):
+    x1 = window['x1']
+    x2 = window['x2']
+    y1 = window['y1']
+    y2 = window['y2']
+
+    w = round((x2 - x1) * ratio)
+    h = round((y2 - y1) * ratio)
+
+    cx = round((x1 + x2) / 2)
+    cy = round((y1 + y2) / 2)
+
+    x1 = round(cx - (w / 2))
+    y1 = round(cy - (h / 2))
+    x2 = round(cx + (w / 2))
+    y2 = round(cy + (h / 2))
+
+    return {'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2}
+
 def selection_enlarged(mask, x1, y1, x2, y2, ratio):
     frame_height, frame_width = mask.shape
 
