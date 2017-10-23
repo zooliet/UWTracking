@@ -201,9 +201,6 @@ while True:
                 if kcf_tracker.force_init_flag is True:
                     print('[KCF] Force init')
                     kcf_tracker.init(frame)
-                    # if sub_tracker:
-                    #     print('[Sub] Force init')
-                    #     sub_tracker.init(frame)
 
                 elif kcf_tracker.enable:
                     boundingbox, loc = kcf_tracker.update(frame)
